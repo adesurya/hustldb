@@ -70,64 +70,82 @@
           </div>
         </div>
         <div class="flex-grow-1">
-          <div class="text-white small fw-semibold">{{ user?.username || 'User' }}</div>
+          <div class="text-white small fw-semibold">{{ username }}</div>
           <div class="text-light opacity-75" style="font-size: 0.75rem;">
-            {{ user?.role || 'Admin' }}
+            {{ userRole }}
           </div>
         </div>
       </div>
       
       <button 
-        @click="handleLogout" 
-        class="btn btn-outline-light btn-sm w-100 d-flex align-items-center justify-content-center"
-        :disabled="isLoggingOut"
+        @click="doLogout" 
+        class="btn btn-outline-light btn-sm w-100 d-flex align-items-center justify-content-center logout-btn"
+        type="button"
       >
-        <div v-if="isLoggingOut" class="spinner-border spinner-border-sm me-2"></div>
-        <i v-else class="fas fa-sign-out-alt me-2"></i>
-        {{ isLoggingOut ? 'Logging out...' : 'Logout' }}
+        <i class="fas fa-sign-out-alt me-2"></i>
+        Logout
       </button>
     </div>
   </div>
 </template>
 
 <script>
-import { mapGetters, mapActions } from 'vuex'
-
 export default {
   name: 'Sidebar',
   
   emits: ['close'],
   
   computed: {
-    ...mapGetters('auth', ['user']),
+    username() {
+      try {
+        const user = JSON.parse(localStorage.getItem('user') || '{}')
+        return user.username || 'User'
+      } catch {
+        return 'User'
+      }
+    },
+    
+    userRole() {
+      try {
+        const user = JSON.parse(localStorage.getItem('user') || '{}')
+        return user.role || 'Admin'
+      } catch {
+        return 'Admin'
+      }
+    },
     
     userInitials() {
-      if (!this.user?.username) return 'U'
-      return this.user.username.substring(0, 2).toUpperCase()
+      try {
+        const username = this.username
+        if (username && username !== 'User') {
+          return username.substring(0, 2).toUpperCase()
+        }
+        return 'U'
+      } catch {
+        return 'U'
+      }
     }
   },
   
   methods: {
-    ...mapActions('auth', ['logout']),
-    
-    async handleLogout() {
+    doLogout() {
+      console.log('Logout clicked!') // Debug log
+      
       try {
-        this.isLoggingOut = true
-        await this.logout()
-        this.$toast.success('Logged out successfully')
-        this.$router.push('/login')
-      } catch (error) {
-        this.$toast.error('Logout failed. Please try again.')
-        console.error('Logout error:', error)
-      } finally {
-        this.isLoggingOut = false
+        localStorage.removeItem('token')
+        localStorage.removeItem('user')
+        console.log('localStorage cleared')
+      } catch (e) {
+        console.log('localStorage clear failed:', e)
       }
-    }
-  },
-
-  data() {
-    return {
-      isLoggingOut: false
+      
+      try {
+        console.log('Redirecting to login...')
+        this.$router.push('/login')
+      } catch (e) {
+        console.log('Router failed, using window.location')
+        window.location.href = '/login'
+      }
     }
   }
 }
@@ -182,6 +200,18 @@ export default {
   background-color: rgba(255, 255, 255, 0.2);
   border-color: rgba(255, 255, 255, 0.5);
   color: white;
+}
+
+.logout-btn {
+  cursor: pointer !important;
+  pointer-events: auto !important;
+  position: relative;
+  z-index: 10;
+}
+
+.logout-btn:hover {
+  background-color: rgba(255, 255, 255, 0.2) !important;
+  transform: none;
 }
 
 @media (max-width: 768px) {
