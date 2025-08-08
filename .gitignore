@@ -5,7 +5,7 @@ yarn-debug.log*
 yarn-error.log*
 
 # Environment files
-.env
+#.env
 .env.local
 .env.development.local
 .env.test.local
@@ -64,4 +64,4 @@ temp/
 *.sw?
 
 #public folder
-public/
+#public/
