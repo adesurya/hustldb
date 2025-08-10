@@ -55,40 +55,72 @@ export default {
 
   data() {
     return {
-      chart: null
+      chart: null,
+      isChartReady: false
     }
   },
 
   mounted() {
-    this.renderChart()
+    this.$nextTick(() => {
+      this.initChart()
+    })
   },
 
   watch: {
     data: {
       deep: true,
       handler() {
-        this.renderChart()
+        if (this.isChartReady) {
+          this.updateChart()
+        }
       }
     }
   },
 
   beforeUnmount() {
-    if (this.chart) {
-      this.chart.destroy()
-    }
+    this.destroyChart()
   },
 
   methods: {
+    async initChart() {
+      try {
+        // Wait for the next tick to ensure DOM is ready
+        await this.$nextTick()
+        
+        // Check if canvas ref exists
+        if (!this.$refs.chartCanvas) {
+          console.warn('Chart canvas ref not found, retrying...')
+          setTimeout(() => this.initChart(), 100)
+          return
+        }
+
+        await this.renderChart()
+      } catch (error) {
+        console.error('Error initializing chart:', error)
+      }
+    },
+
     async renderChart() {
       try {
+        // Dynamic import Chart.js
         const { Chart, registerables } = await import('chart.js')
         Chart.register(...registerables)
         
-        if (this.chart) {
-          this.chart.destroy()
-        }
+        // Destroy existing chart
+        this.destroyChart()
         
-        const ctx = this.$refs.chartCanvas.getContext('2d')
+        // Check if canvas element exists and get context
+        const canvas = this.$refs.chartCanvas
+        if (!canvas) {
+          console.warn('Canvas element not found')
+          return
+        }
+
+        const ctx = canvas.getContext('2d')
+        if (!ctx) {
+          console.warn('Unable to get 2D context')
+          return
+        }
         
         let chartType = this.type
         if (this.type === 'column') {
@@ -102,8 +134,37 @@ export default {
           data: this.data,
           options: { ...defaultOptions, ...this.options }
         })
+
+        this.isChartReady = true
       } catch (error) {
         console.error('Error rendering chart:', error)
+        this.isChartReady = false
+      }
+    },
+
+    updateChart() {
+      if (this.chart && this.data) {
+        try {
+          // Update chart data
+          this.chart.data = this.data
+          this.chart.update('none') // Use 'none' for instant update
+        } catch (error) {
+          console.error('Error updating chart:', error)
+          // If update fails, re-render the chart
+          this.renderChart()
+        }
+      }
+    },
+
+    destroyChart() {
+      if (this.chart) {
+        try {
+          this.chart.destroy()
+        } catch (error) {
+          console.warn('Error destroying chart:', error)
+        }
+        this.chart = null
+        this.isChartReady = false
       }
     },
 
@@ -158,7 +219,7 @@ export default {
                     const label = context.label || ''
                     const value = context.parsed
                     const total = context.dataset.data.reduce((sum, val) => sum + val, 0)
-                    const percentage = ((value / total) * 100).toFixed(1)
+                    const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : '0'
                     return `${label}: ${value} (${percentage}%)`
                   }
                 }
@@ -182,7 +243,7 @@ export default {
                     const label = context.label || ''
                     const value = context.parsed
                     const total = context.dataset.data.reduce((sum, val) => sum + val, 0)
-                    const percentage = ((value / total) * 100).toFixed(1)
+                    const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : '0'
                     return `${label}: ${value} (${percentage}%)`
                   }
                 }
@@ -232,6 +293,7 @@ export default {
   position: relative;
   width: 100%;
   height: 100%;
+  min-height: 200px;
 }
 
 .chart-center-text {

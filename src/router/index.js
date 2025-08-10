@@ -1,3 +1,4 @@
+// /src/router/index.js - Updated with Campaign route
 import { createRouter, createWebHistory } from 'vue-router'
 import store from '../store'
 
@@ -16,6 +17,24 @@ const routes = [
     path: '/dashboard',
     name: 'Dashboard',
     component: () => import('../views/DashboardView.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/products',
+    name: 'Products',
+    component: () => import('../views/ProductView.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/campaigns',
+    name: 'Campaigns',
+    component: () => import('../views/CampaignView.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/users',
+    name: 'Users',
+    component: () => import('../views/UserView.vue'),
     meta: { requiresAuth: true }
   }
 ]

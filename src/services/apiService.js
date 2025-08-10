@@ -1,3 +1,4 @@
+// /src/services/apiService.js - Updated with cookie authentication
 import axios from 'axios'
 import apiConfig, { HTTP_STATUS, ERROR_MESSAGES } from '@/config/api'
 
@@ -10,7 +11,8 @@ class ApiService {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
         'X-Requested-With': 'XMLHttpRequest'
-      }
+      },
+      withCredentials: true // Enable sending cookies
     })
 
     this.setupInterceptors()
@@ -20,10 +22,20 @@ class ApiService {
     // Request Interceptor
     this.client.interceptors.request.use(
       (config) => {
-        // Add auth token if available
+        // Add auth token if available (fallback method)
         const token = localStorage.getItem('token')
         if (token) {
           config.headers.Authorization = `Bearer ${token}`
+        }
+
+        // Get refreshToken from localStorage and set as cookie
+        const refreshToken = localStorage.getItem('refreshToken')
+        if (refreshToken) {
+          // Set refreshToken as cookie for this request
+          config.headers.Cookie = `refreshToken=${refreshToken}`
+          
+          // Alternative: Set cookie directly (if not already set)
+          document.cookie = `refreshToken=${refreshToken}; path=/; secure; samesite=strict`
         }
 
         // Add request timestamp for monitoring
@@ -35,7 +47,8 @@ class ApiService {
             method: config.method?.toUpperCase(),
             url: config.url,
             baseURL: config.baseURL,
-            headers: this.sanitizeHeaders(config.headers)
+            headers: this.sanitizeHeaders(config.headers),
+            params: config.params
           })
         }
 
@@ -63,7 +76,8 @@ class ApiService {
             statusText: response.statusText,
             url: response.config.url,
             duration: `${duration}ms`,
-            data: response.data
+            dataType: typeof response.data,
+            success: response.data?.success
           })
         }
 
@@ -130,6 +144,10 @@ class ApiService {
     // Clear auth data
     localStorage.removeItem('token')
     localStorage.removeItem('user')
+    localStorage.removeItem('refreshToken')
+    
+    // Clear cookies
+    document.cookie = 'refreshToken=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/;'
     
     // Don't redirect during login attempts
     if (!originalRequest?.url?.includes('/auth/login')) {
@@ -139,8 +157,9 @@ class ApiService {
   }
 
   handleForbidden() {
-    // Could show a forbidden message or redirect
-    console.warn('Access forbidden')
+    if (apiConfig.enableLogs) {
+      console.warn('Access forbidden')
+    }
   }
 
   handleNotFound(error) {
@@ -178,6 +197,9 @@ class ApiService {
     if (sanitized.Authorization) {
       sanitized.Authorization = 'Bearer ***'
     }
+    if (sanitized.Cookie) {
+      sanitized.Cookie = 'refreshToken=***'
+    }
     return sanitized
   }
 
@@ -185,8 +207,21 @@ class ApiService {
   setAuthToken(token) {
     if (token) {
       this.client.defaults.headers.common['Authorization'] = `Bearer ${token}`
+      localStorage.setItem('token', token)
     } else {
       delete this.client.defaults.headers.common['Authorization']
+      localStorage.removeItem('token')
+    }
+  }
+
+  setRefreshToken(refreshToken) {
+    if (refreshToken) {
+      localStorage.setItem('refreshToken', refreshToken)
+      // Set as httpOnly cookie for security
+      document.cookie = `refreshToken=${refreshToken}; path=/; secure; samesite=strict`
+    } else {
+      localStorage.removeItem('refreshToken')
+      document.cookie = 'refreshToken=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/;'
     }
   }
 

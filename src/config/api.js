@@ -1,3 +1,4 @@
+// /src/config/api.js - Updated with Campaign endpoints
 // API Configuration for different environments
 const config = {
   development: {
@@ -40,14 +41,60 @@ export const API_ENDPOINTS = {
   DASHBOARD: {
     ORDER_ANALYTICS: '/api/v1/tiktok/orders/analytics',
     AFFILIATE_STATISTICS: '/api/v1/tiktok/admin/statistics',
-    LEADERBOARD_STATISTICS: '/api/v1/leaderboard/statistics'
+    LEADERBOARD_STATISTICS: '/api/v1/leaderboard/statistics',
+    PRODUCT_STATISTICS: '/api/v1/products/statistics',
+    POINT_STATISTICS: '/api/v1/points/admin/statistics',
+    CAMPAIGN_STATISTICS: '/api/v1/campaigns/statistics'
   },
   
-  USER: {
+  PRODUCTS: {
+    LIST: '/api/v1/products/',
+    CREATE: '/api/v1/products/',
+    DETAIL: '/api/v1/products/:id',
+    UPDATE: '/api/v1/products/:id',
+    DELETE: '/api/v1/products/:id',
+    TOGGLE_STATUS: '/api/v1/products/:id/status',
+    BULK_DELETE: '/api/v1/products/bulk-delete',
+    BULK_STATUS: '/api/v1/products/bulk-status',
+    STATISTICS: '/api/v1/products/statistics'
+  },
+  
+  CATEGORIES: {
+    LIST: '/api/v1/categories/',
+    CREATE: '/api/v1/categories/',
+    DETAIL: '/api/v1/categories/:id',
+    UPDATE: '/api/v1/categories/:id',
+    DELETE: '/api/v1/categories/:id'
+  },
+  
+  CAMPAIGNS: {
+    LIST: '/api/v1/campaigns',
+    CREATE: '/api/v1/campaigns',
+    DETAIL: '/api/v1/campaigns/:id',
+    UPDATE: '/api/v1/campaigns/:id',
+    DELETE: '/api/v1/campaigns/:id',
+    TOGGLE_STATUS: '/api/v1/campaigns/:id/toggle-status',
+    ADD_PRODUCTS: '/api/v1/campaigns/:id/products',
+    REMOVE_PRODUCTS: '/api/v1/campaigns/:id/products',
+    GET_PRODUCTS: '/api/v1/campaigns/:id/products',
+    BULK_DELETE: '/api/v1/campaigns/bulk-delete',
+    BULK_STATUS: '/api/v1/campaigns/bulk-status',
+    STATISTICS: '/api/v1/campaigns/statistics'
+  },
+  
+  USERS: {
     LIST: '/api/v1/users',
+    CREATE: '/api/v1/users',
     DETAIL: '/api/v1/users/:id',
     UPDATE: '/api/v1/users/:id',
-    DELETE: '/api/v1/users/:id'
+    DELETE: '/api/v1/users/:id',
+    RESET_PASSWORD: '/api/v1/users/:id/reset-password',
+    BAN: '/api/v1/users/:id/ban',
+    UNBAN: '/api/v1/users/:id/unban',
+    BANNED_LIST: '/api/v1/users/banned',
+    BULK_DELETE: '/api/v1/users/bulk-delete',
+    BULK_STATUS: '/api/v1/users/bulk-status',
+    STATISTICS: '/api/v1/users/statistics'
   }
 }
 

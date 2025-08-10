@@ -8,12 +8,12 @@
             <div class="hazel-brand">
               <!-- Logo Image -->
               <div class="brand-logo">
-                <img src="/images/hazel-logo.png" alt="Hazel Logo" class="logo-image" />
+                <img src="/images/logo.png" alt="Hazel Logo" class="logo-image" />
               </div>
               
               <!-- Brand Text Image -->
               <div class="brand-text">
-                <img src="/images/hazel-text.png" alt="Hazel Text" class="text-image" />
+                <img src="/images/LogoText.png" alt="Hazel Text" class="text-image" />
               </div>
               
               <!-- Subtitle -->
@@ -84,16 +84,6 @@
                   <span v-if="isLoading" class="spinner-border spinner-border-sm me-2"></span>
                   {{ isLoading ? 'Logging in...' : 'Login' }}
                 </button>
-                
-                <!-- Debug button -->
-                <button
-                  type="button"
-                  class="btn btn-outline-secondary w-100 py-2 small"
-                  @click="testApiDirectly"
-                  :disabled="isLoading"
-                >
-                  🔧 Test API Directly
-                </button>
               </form>
             </div>
           </div>
@@ -104,7 +94,7 @@
       <div class="col-md-6 bg-light d-flex align-items-center justify-content-center p-4">
         <div class="text-center">
           <div class="hazel-mascot">
-            <img src="/images/hazel-mascot.png" alt="Hazel Mascot" class="mascot-image" />
+            <img src="/images/logo.png" alt="Hazel Mascot" class="mascot-image" />
           </div>
         </div>
       </div>

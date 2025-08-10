@@ -5,6 +5,8 @@ const state = {
   affiliateStatistics: null,
   leaderboardStatistics: null,
   campaignStatistics: null,
+  productStatistics: null,
+  pointStatistics: null,
   isLoading: false
 }
 
@@ -27,6 +29,14 @@ const mutations = {
   
   SET_CAMPAIGN_STATISTICS (state, data) {
     state.campaignStatistics = data
+  },
+  
+  SET_PRODUCT_STATISTICS (state, data) {
+    state.productStatistics = data
+  },
+  
+  SET_POINT_STATISTICS (state, data) {
+    state.pointStatistics = data
   }
 }
 
@@ -73,13 +83,37 @@ const actions = {
   
   async fetchCampaignStatistics ({ commit }) {
     try {
-      const response = await apiService.get('/api/v1/leaderboard/statistics')
+      const response = await apiService.get('/api/v1/campaigns/statistics')
       
       if (response.data.success) {
         commit('SET_CAMPAIGN_STATISTICS', response.data.data)
       }
     } catch (error) {
       console.error('Failed to fetch campaign statistics:', error)
+    }
+  },
+  
+  async fetchProductStatistics ({ commit }) {
+    try {
+      const response = await apiService.get('/api/v1/products/statistics')
+      
+      if (response.data.success) {
+        commit('SET_PRODUCT_STATISTICS', response.data.data)
+      }
+    } catch (error) {
+      console.error('Failed to fetch product statistics:', error)
+    }
+  },
+  
+  async fetchPointStatistics ({ commit }) {
+    try {
+      const response = await apiService.get('/api/v1/points/admin/statistics')
+      
+      if (response.data.success) {
+        commit('SET_POINT_STATISTICS', response.data.data)
+      }
+    } catch (error) {
+      console.error('Failed to fetch point statistics:', error)
     }
   },
   
@@ -92,7 +126,9 @@ const actions = {
       dispatch('fetchOrderStatistics', { startDate, endDate }),
       dispatch('fetchAffiliateStatistics'),
       dispatch('fetchLeaderboardStatistics'),
-      dispatch('fetchCampaignStatistics')
+      dispatch('fetchCampaignStatistics'),
+      dispatch('fetchProductStatistics'),
+      dispatch('fetchPointStatistics')
     ])
   }
 }
@@ -102,6 +138,8 @@ const getters = {
   affiliateStatistics: (state) => state.affiliateStatistics,
   leaderboardStatistics: (state) => state.leaderboardStatistics,
   campaignStatistics: (state) => state.campaignStatistics,
+  productStatistics: (state) => state.productStatistics,
+  pointStatistics: (state) => state.pointStatistics,
   isLoading: (state) => state.isLoading
 }
 

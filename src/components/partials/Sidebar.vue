@@ -1,3 +1,4 @@
+<!-- Updated Sidebar Component with User link -->
 <template>
   <div class="sidebar d-flex flex-column position-fixed h-100">
     <!-- Mobile Close Button -->
@@ -10,7 +11,7 @@
     <!-- Logo -->
     <div class="sidebar-header p-3 text-center border-bottom border-light border-opacity-25">
       <div class="d-flex align-items-center justify-content-center">
-        <img src="/images/hazel-logo.png" alt="Hazel Logo" class="logo-image me-2" />
+        <img src="/images/logo.png" alt="Hazel Logo" class="logo-image me-2" />
         <h4 class="text-white mb-0 fw-bold">hazel</h4>
       </div>
       <small class="text-light opacity-75">Share Link & Rewards</small>
@@ -31,10 +32,14 @@
         </li>
         
         <li class="nav-item mb-1">
-          <a href="#" class="sidebar-link d-flex align-items-center">
+          <router-link 
+            to="/products" 
+            class="sidebar-link d-flex align-items-center"
+            :class="{ active: $route.name === 'Products' }"
+          >
             <i class="fas fa-box me-3"></i>
             Product
-          </a>
+          </router-link>
         </li>
         
         <li class="nav-item mb-1">
@@ -45,16 +50,20 @@
         </li>
         
         <li class="nav-item mb-1">
-          <a href="#" class="sidebar-link d-flex align-items-center">
-            <i class="fas fa-user me-3"></i>
+          <router-link 
+            to="/users" 
+            class="sidebar-link d-flex align-items-center"
+            :class="{ active: $route.name === 'Users' }"
+          >
+            <i class="fas fa-users me-3"></i>
             User
-          </a>
+          </router-link>
         </li>
         
         <li class="nav-item mb-1">
           <a href="#" class="sidebar-link d-flex align-items-center">
             <i class="fas fa-credit-card me-3"></i>
-            Transaction
+            Order
           </a>
         </li>
       </ul>
@@ -78,12 +87,14 @@
       </div>
       
       <button 
-        @click="doLogout" 
+        @click="handleLogout" 
         class="btn btn-outline-light btn-sm w-100 d-flex align-items-center justify-content-center logout-btn"
         type="button"
+        :disabled="isLoggingOut"
       >
-        <i class="fas fa-sign-out-alt me-2"></i>
-        Logout
+        <i v-if="!isLoggingOut" class="fas fa-sign-out-alt me-2"></i>
+        <i v-else class="fas fa-spinner fa-spin me-2"></i>
+        {{ isLoggingOut ? 'Logging out...' : 'Logout' }}
       </button>
     </div>
   </div>
@@ -94,6 +105,12 @@ export default {
   name: 'Sidebar',
   
   emits: ['close'],
+  
+  data() {
+    return {
+      isLoggingOut: false
+    }
+  },
   
   computed: {
     username() {
@@ -128,23 +145,150 @@ export default {
   },
   
   methods: {
-    doLogout() {
-      console.log('Logout clicked!') // Debug log
+    async handleLogout() {
+      if (this.isLoggingOut) return
+      
+      this.isLoggingOut = true
       
       try {
-        localStorage.removeItem('token')
-        localStorage.removeItem('user')
-        console.log('localStorage cleared')
-      } catch (e) {
-        console.log('localStorage clear failed:', e)
+        console.log('Starting logout process...')
+        
+        // Call API logout jika ada
+        await this.callLogoutAPI()
+        
+        // Clear all session data
+        this.clearAllSessionData()
+        
+        // Emit logout event ke parent component
+        this.$emit('logout')
+        
+        // Redirect to login
+        await this.redirectToLogin()
+        
+      } catch (error) {
+        console.error('Logout error:', error)
+        
+        // Tetap clear session meskipun API gagal
+        this.clearAllSessionData()
+        
+        // Redirect tetap dilakukan
+        await this.redirectToLogin()
+        
+      } finally {
+        this.isLoggingOut = false
       }
-      
+    },
+    
+    async callLogoutAPI() {
+      try {
+        const token = localStorage.getItem('token')
+        
+        if (token) {
+          // Panggil API logout jika ada endpoint-nya
+          // Ganti URL sesuai dengan endpoint API Anda
+          const response = await fetch('/api/logout', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            }
+          })
+          
+          if (!response.ok) {
+            console.warn('Logout API failed, but continuing with client-side logout')
+          }
+        }
+      } catch (error) {
+        console.warn('Logout API error:', error)
+        // Lanjutkan proses logout meskipun API gagal
+      }
+    },
+    
+    clearAllSessionData() {
+      try {
+        console.log('Clearing all session data...')
+        
+        // Clear localStorage items
+        const itemsToRemove = [
+          'token', 
+          'user', 
+          'refreshToken', 
+          'authToken',
+          'userData',
+          'session',
+          'loginTime',
+          'permissions'
+        ]
+        
+        itemsToRemove.forEach(item => {
+          localStorage.removeItem(item)
+        })
+        
+        // Clear sessionStorage
+        sessionStorage.clear()
+        
+        // Clear cookies terkait authentication
+        this.clearAuthCookies()
+        
+        console.log('Session data cleared successfully')
+        
+      } catch (error) {
+        console.error('Error clearing session data:', error)
+      }
+    },
+    
+    clearAuthCookies() {
+      try {
+        // Daftar cookie yang mungkin perlu dihapus
+        const cookiesToClear = [
+          'token',
+          'authToken', 
+          'session',
+          'user',
+          'remember_token',
+          'access_token'
+        ]
+        
+        cookiesToClear.forEach(cookieName => {
+          // Clear cookie for current domain
+          document.cookie = `${cookieName}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/;`
+          
+          // Clear cookie for all subdomains
+          const domain = window.location.hostname
+          document.cookie = `${cookieName}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=.${domain};`
+        })
+        
+      } catch (error) {
+        console.error('Error clearing cookies:', error)
+      }
+    },
+    
+    async redirectToLogin() {
       try {
         console.log('Redirecting to login...')
-        this.$router.push('/login')
-      } catch (e) {
-        console.log('Router failed, using window.location')
-        window.location.href = '/login'
+        
+        // Tunggu sebentar untuk memastikan state sudah clear
+        await new Promise(resolve => setTimeout(resolve, 100))
+        
+        // Coba gunakan Vue Router dulu
+        if (this.$router) {
+          await this.$router.push({ name: 'Login', query: { logout: 'true' } })
+          
+          // Reload untuk memastikan semua state ter-reset
+          setTimeout(() => {
+            window.location.reload()
+          }, 100)
+          
+        } else {
+          // Fallback ke window.location
+          window.location.href = '/login?logout=true'
+        }
+        
+      } catch (error) {
+        console.error('Router redirect failed, using window.location:', error)
+        
+        // Fallback ultimate
+        window.location.href = '/login?logout=true'
       }
     }
   }
@@ -207,11 +351,26 @@ export default {
   pointer-events: auto !important;
   position: relative;
   z-index: 10;
+  transition: all 0.3s ease;
 }
 
-.logout-btn:hover {
+.logout-btn:hover:not(:disabled) {
   background-color: rgba(255, 255, 255, 0.2) !important;
   transform: none;
+}
+
+.logout-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed !important;
+}
+
+.fa-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 @media (max-width: 768px) {
