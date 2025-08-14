@@ -1,10 +1,10 @@
-// /src/services/campaignService.js - Fixed: Correct API usage and product count parsing
+// /src/services/campaignService.js - Fixed: Correct API usage according to documentation
 class CampaignService {
   constructor() {
     this.baseURL = process.env.VUE_APP_API_URL || 'https://apihustl.sijago.ai'
   }
 
-  // Get authentication headers (for create, update, delete operations)
+  // Get authentication headers (for authenticated operations)
   getAuthHeaders() {
     const headers = {
       'Accept': 'application/json',
@@ -22,7 +22,7 @@ class CampaignService {
     return headers
   }
 
-  // Get public headers (for read operations like GET campaigns)
+  // Get public headers (for read operations)
   getPublicHeaders() {
     return {
       'Accept': 'application/json',
@@ -44,25 +44,27 @@ class CampaignService {
     return config
   }
 
-  // Get public config for fetch (without auth)
+  // Get public config for fetch (without auth - only cookies)
   getPublicConfig(additionalOptions = {}) {
+    // Ensure refresh token is set as cookie for public endpoints
+    this.ensureRefreshTokenCookie()
+
     const config = {
       headers: this.getPublicHeaders(),
+      credentials: 'include', // Include cookies for refreshToken
       ...additionalOptions
     }
 
     return config
   }
 
-  // Ensure refresh token is available in cookie (for authenticated requests)
+  // Ensure refresh token is available in cookie
   ensureRefreshTokenCookie() {
     try {
-      // Check if refresh token exists in localStorage
       const refreshToken = localStorage.getItem('refreshToken')
       if (refreshToken) {
-        // Set it as cookie for the request
         document.cookie = `refreshToken=${refreshToken}; path=/; secure; samesite=strict`
-        console.log('🍪 Refresh token cookie set for authenticated request')
+        console.log('🍪 Refresh token cookie set for request')
       } else {
         console.warn('⚠️ No refresh token found in localStorage')
       }
@@ -71,20 +73,21 @@ class CampaignService {
     }
   }
 
-  // Get all campaigns with pagination and filters - FIXED WITH PROPER PRODUCT COUNT
+  // 1. LIST ALL CAMPAIGNS - Uses cookies only
   async getCampaigns(params = {}) {
     try {
-      console.log('🚀 Getting campaigns with product count...')
+      console.log('🚀 Getting all campaigns...')
       
-      const url = new URL(`${this.baseURL}/api/v1/campaigns`)
+      const url = new URL(`${this.baseURL}/api/v1/campaigns/`)
       
+      // Add query parameters if provided
       if (params.page) url.searchParams.append('page', params.page)
       if (params.limit) url.searchParams.append('limit', params.limit)
       if (params.status) url.searchParams.append('status', params.status)
       
       console.log('📡 Request URL:', url.toString())
       
-      // Use public config (no authentication for listing)
+      // Use public config (cookies only)
       const response = await fetch(url.toString(), {
         method: 'GET',
         ...this.getPublicConfig()
@@ -97,13 +100,7 @@ class CampaignService {
       }
 
       const data = await response.json()
-      console.log('📦 Raw campaigns response:', data)
-      
-      // Enhance campaign data with accurate product count
-      if (data.success && data.data && Array.isArray(data.data)) {
-        console.log('🔧 Enhancing campaigns with product count...')
-        data.data = await this.enhanceCampaignsWithProductCount(data.data)
-      }
+      console.log('📦 Campaigns response:', data)
       
       return this.handleApiResponse(data)
     } catch (error) {
@@ -112,15 +109,50 @@ class CampaignService {
     }
   }
 
-  // Get single campaign by ID with product count - FIXED
+  // 2. LIST ACTIVE CAMPAIGNS - Uses cookies only
+  async getActiveCampaigns(params = {}) {
+    try {
+      console.log('🚀 Getting active campaigns...')
+      
+      const url = new URL(`${this.baseURL}/api/v1/campaigns/active`)
+      
+      // Add query parameters if provided
+      if (params.page) url.searchParams.append('page', params.page)
+      if (params.limit) url.searchParams.append('limit', params.limit)
+      
+      console.log('📡 Request URL:', url.toString())
+      
+      // Use public config (cookies only)
+      const response = await fetch(url.toString(), {
+        method: 'GET',
+        ...this.getPublicConfig()
+      })
+
+      console.log('📡 Response status:', response.status)
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      const data = await response.json()
+      console.log('📦 Active campaigns response:', data)
+      
+      return this.handleApiResponse(data)
+    } catch (error) {
+      console.error('❌ getActiveCampaigns error:', error)
+      throw this.handleApiError(error)
+    }
+  }
+
+  // 3. GET SINGLE CAMPAIGN DETAIL - Uses cookies only
   async getCampaign(id) {
     try {
-      console.log(`🚀 Getting campaign ${id} with product details...`)
+      console.log(`🚀 Getting campaign detail ${id}...`)
       
       const url = `${this.baseURL}/api/v1/campaigns/${id}`
       console.log('📡 Request URL:', url)
       
-      // Use public config (no authentication for reading)
+      // Use public config (cookies only)
       const response = await fetch(url, {
         method: 'GET',
         ...this.getPublicConfig()
@@ -133,13 +165,7 @@ class CampaignService {
       }
 
       const data = await response.json()
-      console.log('📦 Raw campaign response:', data)
-      
-      // Enhance single campaign with accurate product count
-      if (data.success && data.data) {
-        console.log('🔧 Enhancing campaign with product count...')
-        data.data = await this.enhanceCampaignWithProductCount(data.data)
-      }
+      console.log('📦 Campaign detail response:', data)
       
       return this.handleApiResponse(data)
     } catch (error) {
@@ -148,194 +174,38 @@ class CampaignService {
     }
   }
 
-  // Enhanced method to get accurate product count for multiple campaigns
-  async enhanceCampaignsWithProductCount(campaigns) {
-    console.log('📊 Processing', campaigns.length, 'campaigns for product count...')
-    
-    const enhancedCampaigns = []
-    
-    // Process campaigns in parallel for better performance
-    const enhancePromises = campaigns.map(campaign => this.enhanceCampaignWithProductCount(campaign))
-    const results = await Promise.all(enhancePromises)
-    
-    results.forEach((enhancedCampaign, index) => {
-      console.log(`📈 Campaign ${enhancedCampaign.id}: ${enhancedCampaign.productCount} products`)
-      enhancedCampaigns.push(enhancedCampaign)
-    })
-    
-    return enhancedCampaigns
-  }
-
-  // Enhanced method to get accurate product count for single campaign - FIXED
-  async enhanceCampaignWithProductCount(campaign) {
-    try {
-      // If productCount is already provided and valid, use it
-      if (campaign.productCount !== undefined && campaign.productCount !== null && campaign.productCount > 0) {
-        console.log(`✅ Campaign ${campaign.id} already has product count:`, campaign.productCount)
-        return campaign
-      }
-
-      // If products array is provided, count it
-      if (campaign.products && Array.isArray(campaign.products)) {
-        campaign.productCount = campaign.products.length
-        console.log(`✅ Campaign ${campaign.id} product count from products array:`, campaign.productCount)
-        return campaign
-      }
-
-      // Fetch product count using the correct API endpoint with auth
-      console.log(`🔍 Fetching product count for campaign ${campaign.id}...`)
-      
-      const productResponse = await this.getCampaignProducts(campaign.id, { page: 1, limit: 1 })
-      
-      if (productResponse.success) {
-        // Use meta.pagination.totalItems for accurate count
-        if (productResponse.meta && productResponse.meta.pagination && productResponse.meta.pagination.totalItems !== undefined) {
-          campaign.productCount = productResponse.meta.pagination.totalItems
-          console.log(`✅ Campaign ${campaign.id} product count from meta:`, campaign.productCount)
-        } 
-        // Fallback to data array length
-        else if (productResponse.data && Array.isArray(productResponse.data)) {
-          // For accurate count, we need to fetch all products
-          const fullProductResponse = await this.getCampaignProducts(campaign.id, { page: 1, limit: 100 })
-          campaign.productCount = fullProductResponse.data ? fullProductResponse.data.length : 0
-          console.log(`✅ Campaign ${campaign.id} product count from full data:`, campaign.productCount)
-        } else {
-          campaign.productCount = 0
-        }
-      } else {
-        campaign.productCount = 0
-      }
-
-      return campaign
-    } catch (error) {
-      console.warn(`⚠️ Failed to get product count for campaign ${campaign.id}:`, error.message)
-      campaign.productCount = 0
-      return campaign
-    }
-  }
-
-  // Get campaign products with AUTH - FIXED TO USE CORRECT ENDPOINT
-  async getCampaignProducts(campaignId, params = {}) {
-    try {
-      console.log(`🚀 Getting products for campaign ${campaignId} (WITH AUTH)...`)
-      
-      const url = new URL(`${this.baseURL}/api/v1/campaigns/${campaignId}/products`)
-      
-      // Add pagination parameters
-      const page = params.page || 1
-      const limit = params.limit || 20
-      
-      url.searchParams.append('page', page)
-      url.searchParams.append('limit', limit)
-      
-      console.log('📡 Request URL:', url.toString())
-      
-      // Ensure we have valid authentication
-      const token = localStorage.getItem('token')
-      if (!token) {
-        throw new Error('No access token found. Please login again.')
-      }
-      
-      // Use auth config (with authentication) - API requires auth for product details
-      const response = await fetch(url.toString(), {
-        method: 'GET',
-        ...this.getAuthConfig()
-      })
-
-      console.log('📡 Response status:', response.status)
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error('Authentication required. Please login again.')
-        }
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-      }
-
-      const data = await response.json()
-      console.log('📦 Campaign products response:', data)
-      
-      // Transform the response to match our expected format
-      if (data.success && data.data && Array.isArray(data.data)) {
-        // Extract actual products from the campaign_products structure
-        const products = data.data.map(item => {
-          // If the item has a 'product' property, use that
-          if (item.product) {
-            return {
-              ...item.product,
-              // Add campaign relation info
-              campaignProductId: item.id,
-              addedBy: item.addedBy,
-              addedAt: item.createdAt
-            }
-          }
-          // Otherwise, assume the item is the product itself
-          return item
-        })
-        
-        return {
-          success: true,
-          data: products,
-          message: data.message,
-          code: data.code,
-          meta: data.meta
-        }
-      }
-      
-      return this.handleApiResponse(data)
-    } catch (error) {
-      console.error('❌ getCampaignProducts error:', error)
-      throw this.handleApiError(error)
-    }
-  }
-
-  // Get campaign detail with products - NEW FEATURE
-  async getCampaignDetail(campaignId) {
-    try {
-      console.log(`🚀 Getting campaign detail for ${campaignId}...`)
-      
-      // Get campaign basic info
-      const campaignResponse = await this.getCampaign(campaignId)
-      if (!campaignResponse.success) {
-        throw new Error('Failed to fetch campaign details')
-      }
-      
-      // Get campaign products
-      const productsResponse = await this.getCampaignProducts(campaignId, { page: 1, limit: 100 })
-      
-      const campaignDetail = {
-        ...campaignResponse.data,
-        products: productsResponse.success ? productsResponse.data : [],
-        productCount: productsResponse.success ? productsResponse.data.length : 0,
-        meta: productsResponse.meta || null
-      }
-      
-      console.log('📦 Campaign detail:', campaignDetail)
-      
-      return {
-        success: true,
-        data: campaignDetail,
-        message: 'Campaign detail retrieved successfully'
-      }
-    } catch (error) {
-      console.error('❌ getCampaignDetail error:', error)
-      throw this.handleApiError(error)
-    }
-  }
-
-  // Create new campaign (REQUIRES AUTH)
+  // 4. CREATE CAMPAIGN (REQUIRES AUTH)
   async createCampaign(campaignData) {
     try {
       console.log('🚀 Creating campaign (WITH AUTH)...')
       
       const url = `${this.baseURL}/api/v1/campaigns`
       
+      // Validate required fields
+      if (!campaignData.name || !campaignData.slug || !campaignData.description) {
+        throw new Error('Name, slug, and description are required')
+      }
+
+      // Validate dates
+      const startDate = new Date(campaignData.startDate)
+      const endDate = new Date(campaignData.endDate)
+      const now = new Date()
+
+      if (startDate <= now) {
+        throw new Error('Start date must be in the future')
+      }
+
+      if (endDate <= startDate) {
+        throw new Error('End date must be after start date')
+      }
+
       // Prepare payload according to API specification
       const payload = {
-        name: campaignData.name,
-        slug: campaignData.slug,
-        description: campaignData.description,
-        startDate: campaignData.startDate,
-        endDate: campaignData.endDate,
+        name: campaignData.name.trim(),
+        slug: campaignData.slug.trim(),
+        description: campaignData.description.trim(),
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
         isActive: campaignData.isActive || false,
         productIds: campaignData.productIds || []
       }
@@ -346,21 +216,14 @@ class CampaignService {
       }
 
       console.log('📤 Campaign payload:', payload)
-      console.log('🔑 Auth headers:', this.getAuthHeaders())
       
       // Ensure we have valid authentication
       const token = localStorage.getItem('token')
-      const refreshToken = localStorage.getItem('refreshToken')
-      
       if (!token) {
         throw new Error('No access token found. Please login again.')
       }
       
-      if (!refreshToken) {
-        console.warn('⚠️ No refresh token found. Request might fail if token is expired.')
-      }
-      
-      // Use auth config (with authentication)
+      // Use auth config (with authentication + cookies)
       const response = await fetch(url, {
         method: 'POST',
         ...this.getAuthConfig(),
@@ -368,7 +231,6 @@ class CampaignService {
       })
 
       console.log('📡 Response status:', response.status)
-      console.log('📡 Response headers:', Object.fromEntries(response.headers.entries()))
 
       if (!response.ok) {
         const errorData = await response.text()
@@ -377,12 +239,7 @@ class CampaignService {
       }
 
       const data = await response.json()
-      console.log('📦 Response data:', data)
-      
-      // Enhance the created campaign with product count
-      if (data.success && data.data) {
-        data.data = await this.enhanceCampaignWithProductCount(data.data)
-      }
+      console.log('📦 Create campaign response:', data)
       
       return this.handleApiResponse(data)
     } catch (error) {
@@ -391,26 +248,42 @@ class CampaignService {
     }
   }
 
-  // Update campaign (REQUIRES AUTH)
+  // 5. UPDATE CAMPAIGN (REQUIRES AUTH)
   async updateCampaign(id, campaignData) {
     try {
       console.log(`🚀 Updating campaign ${id} (WITH AUTH)...`)
       
       const url = `${this.baseURL}/api/v1/campaigns/${id}`
       
-      // Prepare payload according to API specification
-      const payload = {
-        name: campaignData.name,
-        slug: campaignData.slug,
-        description: campaignData.description,
-        startDate: campaignData.startDate,
-        endDate: campaignData.endDate,
-        isActive: campaignData.isActive || false
+      // Validate dates if provided
+      if (campaignData.startDate && campaignData.endDate) {
+        const startDate = new Date(campaignData.startDate)
+        const endDate = new Date(campaignData.endDate)
+        const now = new Date()
+
+        if (startDate <= now) {
+          throw new Error('Start date must be in the future')
+        }
+
+        if (endDate <= startDate) {
+          throw new Error('End date must be after start date')
+        }
       }
 
-      // Add productIds only if provided (for adding/updating products)
-      if (campaignData.productIds && Array.isArray(campaignData.productIds)) {
-        payload.productIds = campaignData.productIds
+      // Prepare payload according to API specification
+      const payload = {
+        name: campaignData.name?.trim(),
+        slug: campaignData.slug?.trim(),
+        description: campaignData.description?.trim(),
+        isActive: campaignData.isActive
+      }
+
+      // Add dates if provided
+      if (campaignData.startDate) {
+        payload.startDate = new Date(campaignData.startDate).toISOString()
+      }
+      if (campaignData.endDate) {
+        payload.endDate = new Date(campaignData.endDate).toISOString()
       }
 
       // Add image if provided
@@ -418,8 +291,14 @@ class CampaignService {
         payload.image = campaignData.image
       }
 
+      // Remove undefined values
+      Object.keys(payload).forEach(key => {
+        if (payload[key] === undefined) {
+          delete payload[key]
+        }
+      })
+
       console.log('📤 Update campaign payload:', payload)
-      console.log('🔑 Auth headers:', this.getAuthHeaders())
       
       // Ensure we have valid authentication
       const token = localStorage.getItem('token')
@@ -427,7 +306,7 @@ class CampaignService {
         throw new Error('No access token found. Please login again.')
       }
       
-      // Use auth config (with authentication)
+      // Use auth config (with authentication + cookies)
       const response = await fetch(url, {
         method: 'PUT',
         ...this.getAuthConfig(),
@@ -443,12 +322,7 @@ class CampaignService {
       }
 
       const data = await response.json()
-      console.log('📦 Response data:', data)
-      
-      // Enhance the updated campaign with product count
-      if (data.success && data.data) {
-        data.data = await this.enhanceCampaignWithProductCount(data.data)
-      }
+      console.log('📦 Update campaign response:', data)
       
       return this.handleApiResponse(data)
     } catch (error) {
@@ -457,7 +331,7 @@ class CampaignService {
     }
   }
 
-  // Delete campaign (REQUIRES AUTH)
+  // 6. DELETE CAMPAIGN (REQUIRES AUTH)
   async deleteCampaign(id) {
     try {
       console.log(`🚀 Deleting campaign ${id} (WITH AUTH)...`)
@@ -470,7 +344,7 @@ class CampaignService {
         throw new Error('No access token found. Please login again.')
       }
       
-      // Use auth config (with authentication)
+      // Use auth config (with authentication + cookies)
       const response = await fetch(url, {
         method: 'DELETE',
         ...this.getAuthConfig()
@@ -479,11 +353,13 @@ class CampaignService {
       console.log('📡 Response status:', response.status)
 
       if (!response.ok) {
+        const errorData = await response.text()
+        console.error('❌ Error response:', errorData)
         throw new Error(`HTTP ${response.status}: ${response.statusText}`)
       }
 
       const data = await response.json()
-      console.log('📦 Response data:', data)
+      console.log('📦 Delete campaign response:', data)
       
       return this.handleApiResponse(data)
     } catch (error) {
@@ -492,42 +368,7 @@ class CampaignService {
     }
   }
 
-  // Toggle campaign active status (REQUIRES AUTH)
-  async toggleCampaignStatus(id) {
-    try {
-      console.log(`🚀 Toggling campaign ${id} status (WITH AUTH)...`)
-      
-      const url = `${this.baseURL}/api/v1/campaigns/${id}/toggle-status`
-      
-      // Ensure we have valid authentication
-      const token = localStorage.getItem('token')
-      if (!token) {
-        throw new Error('No access token found. Please login again.')
-      }
-      
-      // Use auth config (with authentication)
-      const response = await fetch(url, {
-        method: 'PATCH',
-        ...this.getAuthConfig()
-      })
-
-      console.log('📡 Response status:', response.status)
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-      }
-
-      const data = await response.json()
-      console.log('📦 Response data:', data)
-      
-      return this.handleApiResponse(data)
-    } catch (error) {
-      console.error('❌ toggleCampaignStatus error:', error)
-      throw this.handleApiError(error)
-    }
-  }
-
-  // Add products to campaign (REQUIRES AUTH)
+  // 7. ADD PRODUCTS TO CAMPAIGN (REQUIRES AUTH)
   async addProductsToCampaign(campaignId, productIds) {
     try {
       console.log(`🚀 Adding products to campaign ${campaignId} (WITH AUTH)...`)
@@ -541,10 +382,12 @@ class CampaignService {
         throw new Error('No access token found. Please login again.')
       }
       
-      const payload = { productIds: Array.isArray(productIds) ? productIds : [productIds] }
+      const payload = { 
+        productIds: Array.isArray(productIds) ? productIds : [productIds] 
+      }
       console.log('📤 Add products payload:', payload)
       
-      // Use auth config (with authentication)
+      // Use auth config (with authentication + cookies)
       const response = await fetch(url, {
         method: 'POST',
         ...this.getAuthConfig(),
@@ -560,7 +403,7 @@ class CampaignService {
       }
 
       const data = await response.json()
-      console.log('📦 Response data:', data)
+      console.log('📦 Add products response:', data)
       
       return this.handleApiResponse(data)
     } catch (error) {
@@ -569,7 +412,7 @@ class CampaignService {
     }
   }
 
-  // Remove products from campaign (REQUIRES AUTH)
+  // 8. REMOVE PRODUCTS FROM CAMPAIGN (REQUIRES AUTH)
   async removeProductsFromCampaign(campaignId, productIds) {
     try {
       console.log(`🚀 Removing products from campaign ${campaignId} (WITH AUTH)...`)
@@ -583,10 +426,12 @@ class CampaignService {
         throw new Error('No access token found. Please login again.')
       }
       
-      const payload = { productIds: Array.isArray(productIds) ? productIds : [productIds] }
+      const payload = { 
+        productIds: Array.isArray(productIds) ? productIds : [productIds] 
+      }
       console.log('📤 Remove products payload:', payload)
       
-      // Use auth config (with authentication)
+      // Use auth config (with authentication + cookies)
       const response = await fetch(url, {
         method: 'DELETE',
         ...this.getAuthConfig(),
@@ -602,7 +447,7 @@ class CampaignService {
       }
 
       const data = await response.json()
-      console.log('📦 Response data:', data)
+      console.log('📦 Remove products response:', data)
       
       return this.handleApiResponse(data)
     } catch (error) {
@@ -611,12 +456,12 @@ class CampaignService {
     }
   }
 
-  // Bulk delete campaigns (REQUIRES AUTH)
-  async bulkDeleteCampaigns(campaignIds) {
+  // 9. VALIDATE PRODUCT AVAILABILITY (REQUIRES AUTH)
+  async validateProductForCampaign(campaignId, productId) {
     try {
-      console.log('🚀 Bulk deleting campaigns (WITH AUTH)...')
+      console.log(`🚀 Validating product ${productId} for campaign ${campaignId} (WITH AUTH)...`)
       
-      const url = `${this.baseURL}/api/v1/campaigns/bulk-delete`
+      const url = `${this.baseURL}/api/v1/campaigns/${campaignId}/validate-product`
       
       // Ensure we have valid authentication
       const token = localStorage.getItem('token')
@@ -624,59 +469,190 @@ class CampaignService {
         throw new Error('No access token found. Please login again.')
       }
       
-      // Use auth config (with authentication)
+      const payload = { productId }
+      console.log('📤 Validate product payload:', payload)
+      
+      // Use auth config (with authentication + cookies)
       const response = await fetch(url, {
         method: 'POST',
         ...this.getAuthConfig(),
-        body: JSON.stringify({ ids: campaignIds })
+        body: JSON.stringify(payload)
       })
 
       console.log('📡 Response status:', response.status)
 
       if (!response.ok) {
+        const errorData = await response.text()
+        console.error('❌ Error response:', errorData)
         throw new Error(`HTTP ${response.status}: ${response.statusText}`)
       }
 
       const data = await response.json()
-      console.log('📦 Response data:', data)
+      console.log('📦 Validate product response:', data)
       
       return this.handleApiResponse(data)
+    } catch (error) {
+      console.error('❌ validateProductForCampaign error:', error)
+      throw this.handleApiError(error)
+    }
+  }
+
+  // Helper method to get campaign detail with products (uses getCampaign)
+  async getCampaignDetail(campaignId) {
+    try {
+      console.log(`🚀 Getting detailed campaign info for ${campaignId}...`)
+      
+      // Get campaign with products using the single endpoint
+      const response = await this.getCampaign(campaignId)
+      
+      if (response.success && response.data) {
+        // The API returns products array in the data
+        const campaignDetail = {
+          ...response.data,
+          // Ensure productCount is accurate
+          productCount: response.data.products ? response.data.products.length : 0
+        }
+        
+        console.log('📦 Campaign detail processed:', campaignDetail)
+        
+        return {
+          success: true,
+          data: campaignDetail,
+          message: 'Campaign detail retrieved successfully'
+        }
+      }
+      
+      return response
+    } catch (error) {
+      console.error('❌ getCampaignDetail error:', error)
+      throw this.handleApiError(error)
+    }
+  }
+
+  // Legacy method for compatibility (redirects to getCampaign since API includes products)
+  async getCampaignProducts(campaignId, params = {}) {
+    try {
+      console.log(`🚀 Getting products for campaign ${campaignId}...`)
+      
+      // Get campaign detail which includes products
+      const response = await this.getCampaign(campaignId)
+      
+      if (response.success && response.data && response.data.products) {
+        // Transform the response to match expected format
+        const products = response.data.products.map(product => {
+          return {
+            ...product,
+            // Add campaign relation info if available
+            campaignProductId: product.CampaignProduct?.id || product.campaignProduct?.id,
+            addedBy: product.CampaignProduct?.added_by || product.campaignProduct?.added_by,
+            addedAt: product.CampaignProduct?.created_at || product.campaignProduct?.created_at
+          }
+        })
+        
+        return {
+          success: true,
+          data: products,
+          message: 'Campaign products retrieved successfully',
+          meta: {
+            pagination: {
+              totalItems: products.length,
+              currentPage: 1,
+              totalPages: 1
+            }
+          }
+        }
+      }
+      
+      return {
+        success: true,
+        data: [],
+        message: 'No products found for this campaign'
+      }
+    } catch (error) {
+      console.error('❌ getCampaignProducts error:', error)
+      throw this.handleApiError(error)
+    }
+  }
+
+  // Toggle campaign active status (placeholder - implement if API provides this endpoint)
+  async toggleCampaignStatus(id) {
+    try {
+      console.log(`🚀 Toggling campaign ${id} status...`)
+      
+      // Get current campaign first
+      const currentResponse = await this.getCampaign(id)
+      if (!currentResponse.success) {
+        throw new Error('Failed to get current campaign status')
+      }
+      
+      // Toggle the status
+      const newStatus = !currentResponse.data.isActive
+      
+      // Update the campaign with new status
+      const updateResponse = await this.updateCampaign(id, { 
+        isActive: newStatus 
+      })
+      
+      return updateResponse
+    } catch (error) {
+      console.error('❌ toggleCampaignStatus error:', error)
+      throw this.handleApiError(error)
+    }
+  }
+
+  // Bulk operations (implement if API provides these endpoints)
+  async bulkDeleteCampaigns(campaignIds) {
+    try {
+      console.log('🚀 Bulk deleting campaigns...')
+      
+      // Since no bulk endpoint is documented, delete one by one
+      const results = []
+      for (const id of campaignIds) {
+        try {
+          const result = await this.deleteCampaign(id)
+          results.push({ id, success: true, result })
+        } catch (error) {
+          results.push({ id, success: false, error: error.message })
+        }
+      }
+      
+      const successCount = results.filter(r => r.success).length
+      const failedCount = results.filter(r => !r.success).length
+      
+      return {
+        success: true,
+        message: `Bulk delete completed: ${successCount} successful, ${failedCount} failed`,
+        data: results
+      }
     } catch (error) {
       console.error('❌ bulkDeleteCampaigns error:', error)
       throw this.handleApiError(error)
     }
   }
 
-  // Bulk update campaign status (REQUIRES AUTH)
   async bulkUpdateStatus(campaignIds, isActive) {
     try {
-      console.log('🚀 Bulk updating campaign status (WITH AUTH)...')
+      console.log('🚀 Bulk updating campaign status...')
       
-      const url = `${this.baseURL}/api/v1/campaigns/bulk-status`
-      
-      // Ensure we have valid authentication
-      const token = localStorage.getItem('token')
-      if (!token) {
-        throw new Error('No access token found. Please login again.')
+      // Since no bulk endpoint is documented, update one by one
+      const results = []
+      for (const id of campaignIds) {
+        try {
+          const result = await this.updateCampaign(id, { isActive })
+          results.push({ id, success: true, result })
+        } catch (error) {
+          results.push({ id, success: false, error: error.message })
+        }
       }
       
-      // Use auth config (with authentication)
-      const response = await fetch(url, {
-        method: 'POST',
-        ...this.getAuthConfig(),
-        body: JSON.stringify({ ids: campaignIds, isActive })
-      })
-
-      console.log('📡 Response status:', response.status)
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-      }
-
-      const data = await response.json()
-      console.log('📦 Response data:', data)
+      const successCount = results.filter(r => r.success).length
+      const failedCount = results.filter(r => !r.success).length
       
-      return this.handleApiResponse(data)
+      return {
+        success: true,
+        message: `Bulk status update completed: ${successCount} successful, ${failedCount} failed`,
+        data: results
+      }
     } catch (error) {
       console.error('❌ bulkUpdateStatus error:', error)
       throw this.handleApiError(error)

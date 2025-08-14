@@ -1,4 +1,4 @@
-// /src/services/userService.js - User management service
+// /src/services/userService.js - Fixed User management service
 import apiService from '@/services/apiService'
 
 class UserService {
@@ -100,6 +100,16 @@ class UserService {
     }
   }
 
+  // Check user ban status
+  async checkBanStatus(id) {
+    try {
+      const response = await apiService.get(`/api/v1/users/${id}/ban-status`)
+      return this.handleApiResponse(response)
+    } catch (error) {
+      throw this.handleApiError(error)
+    }
+  }
+
   // Bulk delete users
   async bulkDeleteUsers(userIds) {
     try {
@@ -133,7 +143,8 @@ class UserService {
         data: response.data.data || response.data,
         message: response.data.message,
         meta: response.data.meta,
-        code: response.data.code
+        code: response.data.code,
+        timestamp: response.data.timestamp
       }
     }
     

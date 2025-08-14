@@ -1,4 +1,4 @@
-<!-- /src/components/modals/CampaignDetailModal.vue - Complete Version -->
+<!-- /src/components/modals/CampaignDetailModal.vue - Fixed with proper API integration -->
 <template>
   <div 
     v-if="show"
@@ -22,7 +22,7 @@
         
         <div class="modal-body">
           <!-- Loading State -->
-          <div v-if="isLoading" class="text-center py-5">
+          <div v-if="isLoading || campaign?.isLoading" class="text-center py-5">
             <div class="spinner-border text-primary" role="status">
               <span class="visually-hidden">Loading...</span>
             </div>
@@ -214,7 +214,7 @@
                       <!-- Campaign Relation Info -->
                       <div class="relation-info mt-2">
                         <small class="text-muted">
-                          Added: {{ formatDateTime(product.addedAt) }}
+                          Added: {{ formatDateTime(product.CampaignProduct?.created_at || product.campaignProduct?.created_at) }}
                         </small>
                       </div>
                     </div>
@@ -267,7 +267,7 @@
                         <i class="fas fa-clock text-warning"></i>
                       </div>
                       <div class="stat-content">
-                        <div class="stat-number">{{ campaignDetail.daysUntilStart || 0 }}</div>
+                        <div class="stat-number">{{ calculateDaysUntilStart(campaignDetail.startDate) }}</div>
                         <div class="stat-label">Days to Start</div>
                       </div>
                     </div>
@@ -279,7 +279,7 @@
                         <i class="fas fa-hourglass-end text-danger"></i>
                       </div>
                       <div class="stat-content">
-                        <div class="stat-number">{{ campaignDetail.daysUntilEnd || 0 }}</div>
+                        <div class="stat-number">{{ calculateDaysUntilEnd(campaignDetail.endDate) }}</div>
                         <div class="stat-label">Days to End</div>
                       </div>
                     </div>
@@ -304,15 +304,6 @@
                           <span :class="campaignDetail.isActive ? 'text-success' : 'text-danger'">
                             <i :class="campaignDetail.isActive ? 'fas fa-check-circle' : 'fas fa-times-circle'" class="me-1"></i>
                             {{ campaignDetail.isActive ? 'Active' : 'Inactive' }}
-                          </span>
-                        </span>
-                      </div>
-                      <div class="info-item">
-                        <span class="info-item-label">Currently Running:</span>
-                        <span class="info-item-value">
-                          <span :class="campaignDetail.isCurrentlyActive ? 'text-success' : 'text-muted'">
-                            <i :class="campaignDetail.isCurrentlyActive ? 'fas fa-play' : 'fas fa-pause'" class="me-1"></i>
-                            {{ campaignDetail.isCurrentlyActive ? 'Yes' : 'No' }}
                           </span>
                         </span>
                       </div>
@@ -464,9 +455,14 @@ export default {
     },
 
     campaign: {
-      handler() {
-        if (this.show && this.campaign) {
-          this.loadCampaignDetail()
+      handler(newVal) {
+        if (this.show && newVal) {
+          // If campaign data is already loaded (from parent), use it
+          if (newVal && !newVal.isLoading && newVal.products) {
+            this.campaignDetail = newVal
+          } else {
+            this.loadCampaignDetail()
+          }
         }
       },
       immediate: true
@@ -481,10 +477,16 @@ export default {
     async loadCampaignDetail() {
       if (!this.campaign?.id) return
       
+      // If campaign data is already complete, use it
+      if (this.campaign && !this.campaign.isLoading && this.campaign.products) {
+        this.campaignDetail = this.campaign
+        return
+      }
+      
       this.isLoading = true
       try {
         console.log('🚀 Loading campaign detail for:', this.campaign.id)
-        const response = await campaignService.getCampaignDetail(this.campaign.id)
+        const response = await campaignService.getCampaign(this.campaign.id)
         if (response.success) {
           this.campaignDetail = response.data
           console.log('📦 Campaign detail loaded:', this.campaignDetail)
@@ -502,15 +504,14 @@ export default {
       
       this.isLoadingProducts = true
       try {
-        console.log('🔄 Refreshing campaign products...')
-        const response = await campaignService.getCampaignProducts(this.campaignDetail.id, { page: 1, limit: 100 })
+        console.log('🔄 Refreshing campaign detail...')
+        const response = await campaignService.getCampaign(this.campaignDetail.id)
         if (response.success) {
-          this.campaignDetail.products = response.data
-          this.campaignDetail.productCount = response.data.length
-          console.log('✅ Products refreshed:', response.data.length, 'products')
+          this.campaignDetail = response.data
+          console.log('✅ Campaign detail refreshed')
         }
       } catch (error) {
-        console.error('Failed to refresh products:', error)
+        console.error('Failed to refresh campaign detail:', error)
       } finally {
         this.isLoadingProducts = false
       }
@@ -519,6 +520,24 @@ export default {
     getActiveProductsCount() {
       if (!this.campaignDetail?.products) return 0
       return this.campaignDetail.products.filter(product => product.isActive).length
+    },
+
+    calculateDaysUntilStart(startDate) {
+      if (!startDate) return 0
+      const now = new Date()
+      const start = new Date(startDate)
+      const diffTime = start - now
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+      return diffDays > 0 ? diffDays : 0
+    },
+
+    calculateDaysUntilEnd(endDate) {
+      if (!endDate) return 0
+      const now = new Date()
+      const end = new Date(endDate)
+      const diffTime = end - now
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+      return diffDays > 0 ? diffDays : 0
     },
 
     editCampaign() {
@@ -583,7 +602,7 @@ export default {
         if (campaign.image.startsWith('http')) {
           return campaign.image
         } else {
-          return `${process.env.VUE_APP_API_URL || 'https://apihustl.sijago.ai'}/uploads/campaigns/${campaign.image}`
+          return `https://apihustl.sijago.ai/uploads/campaigns/${campaign.image}`
         }
       }
       return 'https://cdn.create.web.com/images/industries/common/images/placeholder-product-image-sq.jpg'
@@ -595,7 +614,7 @@ export default {
         if (product.image.startsWith('http')) {
           return product.image
         } else {
-          return `${process.env.VUE_APP_API_URL || 'https://apihustl.sijago.ai'}/uploads/products/${product.image}`
+          return `https://apihustl.sijago.ai/uploads/products/${product.image}`
         }
       }
       return 'https://cdn.create.web.com/images/industries/common/images/placeholder-product-image-sq.jpg'
@@ -950,171 +969,11 @@ export default {
   word-break: break-word;
 }
 
-/* Badge Styles */
-.badge {
-  font-size: 0.75rem;
-  padding: 0.5rem 0.75rem;
-  border-radius: 6px;
-}
-
-.badge.bg-success {
-  background-color: #28a745 !important;
-}
-
-.badge.bg-warning {
-  background-color: #ffc107 !important;
-  color: #000;
-}
-
-.badge.bg-danger {
-  background-color: #dc3545 !important;
-}
-
-.badge.bg-secondary {
-  background-color: #6c757d !important;
-}
-
-.badge.bg-light {
-  background-color: #f8f9fa !important;
-  color: #495057 !important;
-  border: 1px solid #dee2e6;
-}
-
-.badge.bg-info {
-  background-color: #17a2b8 !important;
-}
-
-/* Button Styles */
-.btn {
-  border-radius: 8px;
-  font-weight: 500;
-  padding: 0.75rem 1.5rem;
-  transition: all 0.3s ease;
-}
-
-.btn-primary {
-  background-color: #007bff;
-  border-color: #007bff;
-}
-
-.btn-primary:hover {
-  background-color: #0056b3;
-  border-color: #0056b3;
-  transform: translateY(-1px);
-}
-
-.btn-success {
-  background-color: #28a745;
-  border-color: #28a745;
-}
-
-.btn-success:hover {
-  background-color: #218838;
-  border-color: #1e7e34;
-  transform: translateY(-1px);
-}
-
-.btn-light {
-  background-color: #f8f9fa;
-  border-color: #f8f9fa;
-  color: #6c757d;
-}
-
-.btn-light:hover {
-  background-color: #e9ecef;
-  border-color: #e9ecef;
-  color: #495057;
-}
-
-.btn-sm {
-  padding: 0.375rem 0.75rem;
-  font-size: 0.875rem;
-}
-
-.btn-outline-primary {
-  color: #007bff;
-  border-color: #007bff;
-}
-
-.btn-outline-primary:hover:not(:disabled) {
-  background-color: #007bff;
-  border-color: #007bff;
-  color: white;
-}
-
-.btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.btn-close {
-  background: none;
-  border: none;
-  font-size: 1.2rem;
-  opacity: 0.5;
-  transition: opacity 0.3s ease;
-}
-
-.btn-close:hover {
-  opacity: 0.75;
-}
-
-/* Animations */
-.fa-spinner {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.product-card {
-  animation: fadeInUp 0.5s ease-out;
-}
-
-.product-card:nth-child(1) { animation-delay: 0.1s; }
-.product-card:nth-child(2) { animation-delay: 0.2s; }
-.product-card:nth-child(3) { animation-delay: 0.3s; }
-.product-card:nth-child(4) { animation-delay: 0.4s; }
-
 /* Responsive Design */
-@media (max-width: 1200px) {
-  .modal-dialog {
-    max-width: 90%;
-  }
-  
-  .products-grid {
-    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-  }
-}
-
 @media (max-width: 768px) {
   .modal-dialog {
     margin: 1rem;
     max-width: calc(100% - 2rem);
-  }
-  
-  .modal-header,
-  .modal-body,
-  .modal-footer {
-    padding-left: 1rem;
-    padding-right: 1rem;
-  }
-  
-  .modal-body {
-    max-height: 70vh;
   }
   
   .campaign-header {
@@ -1135,12 +994,6 @@ export default {
     padding: 0.75rem;
   }
   
-  .info-icon {
-    width: 32px;
-    height: 32px;
-    margin-right: 0.5rem;
-  }
-  
   .campaign-image-container img {
     max-height: 200px;
   }
@@ -1148,120 +1001,26 @@ export default {
   .stat-card {
     padding: 0.75rem;
   }
-  
-  .stat-card .stat-icon {
-    width: 32px;
-    height: 32px;
-    margin-right: 0.5rem;
+}
+
+/* Animation */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
   }
-  
-  .stat-number {
-    font-size: 1.25rem;
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
-@media (max-width: 576px) {
-  .modal-dialog {
-    margin: 0.5rem;
-    max-width: calc(100% - 1rem);
-  }
-  
-  .campaign-image-container img {
-    max-height: 150px;
-  }
-  
-  .btn {
-    width: 100%;
-    margin-bottom: 0.5rem;
-  }
-  
-  .modal-footer {
-    flex-direction: column-reverse;
-  }
-  
-  .modal-footer .btn:last-child {
-    margin-bottom: 0;
-  }
-  
-  .info-item {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-  
-  .info-item-label {
-    min-width: auto;
-    margin-right: 0;
-    margin-bottom: 0.25rem;
-  }
-  
-  .info-item-value {
-    text-align: left;
-  }
-  
-  .product-stats {
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-  
-  .stat-item {
-    text-align: left;
-  }
-  
-  .section-header {
-    flex-direction: column;
-    gap: 1rem;
-    align-items: flex-start;
-  }
-  
-  .section-header .btn {
-    width: auto;
-  }
+.product-card {
+  animation: fadeInUp 0.5s ease-out;
 }
 
-/* Custom scrollbar */
-.modal-body::-webkit-scrollbar {
-  width: 6px;
-}
-
-.modal-body::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 3px;
-}
-
-.modal-body::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 3px;
-}
-
-.modal-body::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
-}
-
-/* Utility Classes */
-.text-truncate-2 {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.fw-semibold {
-  font-weight: 600;
-}
-
-/* Loading States */
-.loading-shimmer {
-  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-  background-size: 200% 100%;
-  animation: loading 1.5s infinite;
-}
-
-@keyframes loading {
-  0% {
-    background-position: 200% 0;
-  }
-  100% {
-    background-position: -200% 0;
-  }
-}
+.product-card:nth-child(1) { animation-delay: 0.1s; }
+.product-card:nth-child(2) { animation-delay: 0.2s; }
+.product-card:nth-child(3) { animation-delay: 0.3s; }
+.product-card:nth-child(4) { animation-delay: 0.4s; }
 </style>

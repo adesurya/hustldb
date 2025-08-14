@@ -1,4 +1,4 @@
-// /src/config/api.js - Updated with Campaign endpoints
+// /src/config/api.js - Fixed with correct Product endpoints
 // API Configuration for different environments
 const config = {
   development: {
@@ -29,7 +29,7 @@ const config = {
 const currentEnv = process.env.NODE_ENV || 'development'
 const apiConfig = config[currentEnv]
 
-// API Endpoints
+// API Endpoints - Fixed to match actual API
 export const API_ENDPOINTS = {
   AUTH: {
     LOGIN: '/api/v1/auth/login',
@@ -48,20 +48,21 @@ export const API_ENDPOINTS = {
   },
   
   PRODUCTS: {
-    LIST: '/api/v1/products/',
-    CREATE: '/api/v1/products/',
+    LIST: '/api/v1/products',
+    CREATE: '/api/v1/products',
     DETAIL: '/api/v1/products/:id',
     UPDATE: '/api/v1/products/:id',
     DELETE: '/api/v1/products/:id',
-    TOGGLE_STATUS: '/api/v1/products/:id/status',
+    TOGGLE_STATUS: '/api/v1/products/:id/toggle-status',
+    TOGGLE_FEATURED: '/api/v1/products/:id/toggle-featured',
     BULK_DELETE: '/api/v1/products/bulk-delete',
     BULK_STATUS: '/api/v1/products/bulk-status',
     STATISTICS: '/api/v1/products/statistics'
   },
   
   CATEGORIES: {
-    LIST: '/api/v1/categories/',
-    CREATE: '/api/v1/categories/',
+    LIST: '/api/v1/categories',
+    CREATE: '/api/v1/categories',
     DETAIL: '/api/v1/categories/:id',
     UPDATE: '/api/v1/categories/:id',
     DELETE: '/api/v1/categories/:id'

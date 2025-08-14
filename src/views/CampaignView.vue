@@ -1,4 +1,4 @@
-<!-- /src/views/CampaignView.vue - Final version with complete layout -->
+<!-- /src/views/CampaignView.vue - Fixed with proper product count and detail modal -->
 <template>
   <div class="dashboard-layout">
     <!-- Sidebar Component -->
@@ -235,31 +235,33 @@
             :key="campaign.id"
             class="col-xl-4 col-lg-6 col-md-6"
           >
-            <div class="campaign-card card h-100 border-0 position-relative">
+            <div class="campaign-card card h-100 border-0 position-relative" @click="viewCampaignDetail(campaign)">
               <!-- Selection Checkbox -->
-              <div class="position-absolute top-0 start-0 p-3">
+              <div class="position-absolute top-0 start-0 p-3" style="z-index: 10;">
                 <input
                   v-model="selectedCampaigns"
                   :value="campaign.id"
                   type="checkbox"
                   class="form-check-input"
+                  @click.stop
                 >
               </div>
 
               <!-- Campaign Menu -->
-              <div class="position-absolute top-0 end-0 p-3">
+              <div class="position-absolute top-0 end-0 p-3" style="z-index: 10;">
                 <div class="dropdown">
                   <button
                     class="btn btn-sm btn-light rounded-circle"
                     data-bs-toggle="dropdown"
                     aria-expanded="false"
+                    @click.stop
                   >
                     <i class="fas fa-ellipsis-v"></i>
                   </button>
                   <ul class="dropdown-menu dropdown-menu-end">
                     <li>
                       <a 
-                        @click="editCampaign(campaign)"
+                        @click.stop="editCampaign(campaign)"
                         class="dropdown-item"
                         href="#"
                       >
@@ -268,7 +270,7 @@
                     </li>
                     <li>
                       <a 
-                        @click="toggleStatus(campaign)"
+                        @click.stop="toggleStatus(campaign)"
                         class="dropdown-item"
                         href="#"
                       >
@@ -281,7 +283,7 @@
                     </li>
                     <li>
                       <a 
-                        @click="viewCampaign(campaign)"
+                        @click.stop="viewCampaignDetail(campaign)"
                         class="dropdown-item"
                         href="#"
                       >
@@ -290,7 +292,7 @@
                     </li>
                     <li>
                       <a 
-                        @click="manageCampaignProducts(campaign)"
+                        @click.stop="manageCampaignProducts(campaign)"
                         class="dropdown-item"
                         href="#"
                       >
@@ -300,7 +302,7 @@
                     <li><hr class="dropdown-divider"></li>
                     <li>
                       <a 
-                        @click="confirmDeleteCampaign(campaign)"
+                        @click.stop="confirmDeleteCampaign(campaign)"
                         class="dropdown-item text-danger"
                         href="#"
                       >
@@ -373,21 +375,21 @@
                   <div class="col-6">
                     <div class="campaign-stat">
                       <span class="stat-label">Days Until Start</span>
-                      <span class="stat-value">{{ campaign.daysUntilStart || 0 }}</span>
+                      <span class="stat-value">{{ calculateDaysUntilStart(campaign.startDate) }}</span>
                     </div>
                   </div>
                   <div class="col-6">
                     <div class="campaign-stat">
                       <span class="stat-label">Days Until End</span>
-                      <span class="stat-value">{{ campaign.daysUntilEnd || 0 }}</span>
+                      <span class="stat-value">{{ calculateDaysUntilEnd(campaign.endDate) }}</span>
                     </div>
                   </div>
                 </div>
 
                 <div class="mb-3">
-                  <span class="badge bg-light text-dark">
+                  <!-- <span class="badge bg-light text-dark">
                     Products: {{ campaign.productCount || 0 }}
-                  </span>
+                  </span> -->
                   <span class="badge bg-light text-dark ms-1">
                     ID: #{{ campaign.id }}
                   </span>
@@ -397,7 +399,7 @@
                 <div class="row g-2">
                   <div class="col-6">
                     <button 
-                      @click="editCampaign(campaign)"
+                      @click.stop="editCampaign(campaign)"
                       class="btn btn-primary btn-sm w-100"
                     >
                       <i class="fas fa-edit me-1"></i>Edit
@@ -405,7 +407,7 @@
                   </div>
                   <div class="col-6">
                     <button 
-                      @click="confirmDeleteCampaign(campaign)"
+                      @click.stop="confirmDeleteCampaign(campaign)"
                       class="btn btn-danger btn-sm w-100"
                     >
                       <i class="fas fa-trash me-1"></i>Delete
@@ -475,12 +477,12 @@
 
     <!-- Campaign Detail Modal -->
     <CampaignDetailModal
-    v-if="showDetailModal"
-    :show="showDetailModal"
-    :campaign="selectedCampaign"
-    @close="showDetailModal = false"
-    @edit="editCampaignFromDetail"
-    @manage-products="manageCampaignProductsFromDetail"
+      v-if="showDetailModal"
+      :show="showDetailModal"
+      :campaign="selectedCampaign"
+      @close="showDetailModal = false"
+      @edit="editCampaignFromDetail"
+      @manage-products="manageCampaignProductsFromDetail"
     />
 
     <!-- Campaign Products Modal -->
@@ -572,6 +574,7 @@ import Footer from '@/components/partials/Footer.vue'
 import CampaignModal from '@/components/modals/CampaignModal.vue'
 import CampaignDetailModal from '@/components/modals/CampaignDetailModal.vue'
 import CampaignProductsModal from '@/components/modals/CampaignProductsModal.vue'
+import campaignService from '@/services/campaignService'
 
 export default {
   name: 'CampaignView',
@@ -745,6 +748,41 @@ export default {
       this.$router.push('/login')
     },
 
+    // Campaign detail functionality
+    async viewCampaignDetail(campaign) {
+      try {
+        console.log('👁️ Viewing campaign details:', campaign.name)
+        
+        // Show loading state
+        this.selectedCampaign = { ...campaign, isLoading: true }
+        this.showDetailModal = true
+        
+        // Fetch detailed campaign information
+        const response = await campaignService.getCampaign(campaign.id)
+        
+        if (response.success) {
+          // Update with detailed data including products
+          this.selectedCampaign = {
+            ...response.data,
+            isLoading: false
+          }
+          console.log('📦 Campaign detail loaded:', this.selectedCampaign)
+        } else {
+          throw new Error('Failed to load campaign details')
+        }
+      } catch (error) {
+        console.error('Failed to load campaign details:', error)
+        this.toast.error('Failed to load campaign details')
+        this.showDetailModal = false
+      }
+    },
+
+    manageCampaignProducts(campaign) {
+      console.log('📦 Managing products for campaign:', campaign.name)
+      this.selectedCampaign = campaign
+      this.showProductsModal = true
+    },
+
     formatNumber(value) {
       if (!value) return '0'
       return parseFloat(value).toLocaleString('id-ID')
@@ -763,6 +801,24 @@ export default {
       } catch (error) {
         return 'Invalid date'
       }
+    },
+
+    calculateDaysUntilStart(startDate) {
+      if (!startDate) return 0
+      const now = new Date()
+      const start = new Date(startDate)
+      const diffTime = start - now
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+      return diffDays > 0 ? diffDays : 0
+    },
+
+    calculateDaysUntilEnd(endDate) {
+      if (!endDate) return 0
+      const now = new Date()
+      const end = new Date(endDate)
+      const diffTime = end - now
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+      return diffDays > 0 ? diffDays : 0
     },
 
     getStatusText(status) {
@@ -823,24 +879,17 @@ export default {
     },
 
     editCampaignFromDetail(campaign) {
-        console.log('✏️ Editing campaign from detail:', campaign.name)
-        this.selectedCampaign = { ...campaign }
-        this.showDetailModal = false
-        this.showEditCampaignModal = true
+      console.log('✏️ Editing campaign from detail:', campaign.name)
+      this.selectedCampaign = { ...campaign }
+      this.showDetailModal = false
+      this.showEditCampaignModal = true
     },
-
-    viewCampaign(campaign) {
-        console.log('👁️ Viewing campaign details:', campaign.name)
-        this.selectedCampaign = campaign
-        this.showDetailModal = true
-    },
-
 
     manageCampaignProductsFromDetail(campaign) {
-        console.log('📦 Managing products from detail:', campaign.name)
-        this.selectedCampaign = campaign
-        this.showDetailModal = false
-        this.showProductsModal = true
+      console.log('📦 Managing products from detail:', campaign.name)
+      this.selectedCampaign = campaign
+      this.showDetailModal = false
+      this.showProductsModal = true
     },
 
     // New method with better naming
@@ -992,7 +1041,7 @@ export default {
         if (campaign.image.startsWith('http')) {
           return campaign.image
         } else {
-          return `${process.env.VUE_APP_API_URL}/uploads/campaigns/${campaign.image}`
+          return `https://apihustl.sijago.ai/uploads/campaigns/${campaign.image}`
         }
       }
       
@@ -1110,6 +1159,7 @@ export default {
 .campaign-card {
   transition: all 0.3s ease;
   overflow: hidden;
+  cursor: pointer;
 }
 
 .campaign-card:hover {

@@ -1,4 +1,4 @@
-<!-- /src/components/modals/ProductModal.vue - Updated with file upload support -->
+<!-- /src/components/modals/ProductModal.vue - Fixed with proper file upload support -->
 <template>
   <div 
     v-if="show"
@@ -407,8 +407,8 @@ export default {
           isFeatured: this.product.isFeatured !== undefined ? this.product.isFeatured : false
         }
         
-        // Set current image URL for preview
-        this.currentImageUrl = this.product.imageUrl || this.product.image || null
+        // Set current image URL for preview - use the correct API base URL
+        this.currentImageUrl = this.getProductImageUrl(this.product)
       } else {
         this.form = {
           title: '',
@@ -485,12 +485,32 @@ export default {
       
       // If editing, show current image again
       if (this.isEdit && this.product) {
-        this.currentImageUrl = this.product.imageUrl || this.product.image || null
+        this.currentImageUrl = this.getProductImageUrl(this.product)
       }
     },
 
     handleCurrentImageError() {
       this.currentImageUrl = null
+    },
+
+    // Image URL helper method using correct API base URL
+    getProductImageUrl(product) {
+      // Use the imageUrl from API response if available
+      if (product.imageUrl) {
+        return product.imageUrl
+      }
+      
+      // Fallback to constructing URL from image filename
+      if (product.image) {
+        if (product.image.startsWith('http')) {
+          return product.image
+        } else {
+          return `https://apihustl.sijago.ai/uploads/products/${product.image}`
+        }
+      }
+      
+      // Return fallback placeholder image
+      return 'https://cdn.create.web.com/images/industries/common/images/placeholder-product-image-sq.jpg'
     },
 
     validateForm() {
@@ -544,20 +564,38 @@ export default {
       this.isSubmitting = true
 
       try {
-        // Prepare form data
+        // Prepare form data - keep the exact structure that matches the API
         const formData = {
-          ...this.form,
+          title: this.form.title.trim(),
+          description: this.form.description.trim(),
+          categoryId: parseInt(this.form.categoryId),
           price: parseFloat(this.form.price),
           points: parseInt(this.form.points),
           stockQuantity: parseInt(this.form.stockQuantity),
-          sortOrder: parseInt(this.form.sortOrder) || 0,
-          categoryId: parseInt(this.form.categoryId)
+          isActive: this.form.isActive,
+          isFeatured: this.form.isFeatured,
+          sortOrder: parseInt(this.form.sortOrder) || 0
         }
 
-        // Remove empty optional fields
-        if (!formData.url) delete formData.url
-        if (!formData.metaTitle) delete formData.metaTitle
-        if (!formData.metaDescription) delete formData.metaDescription
+        // Add optional fields only if they have values
+        if (this.form.url && this.form.url.trim()) {
+          formData.url = this.form.url.trim()
+        }
+        
+        if (this.form.metaTitle && this.form.metaTitle.trim()) {
+          formData.metaTitle = this.form.metaTitle.trim()
+        }
+        
+        if (this.form.metaDescription && this.form.metaDescription.trim()) {
+          formData.metaDescription = this.form.metaDescription.trim()
+        }
+
+        // Add image file if provided
+        if (this.form.image) {
+          formData.image = this.form.image
+        }
+
+        console.log('📤 Submitting form data:', formData)
 
         this.$emit('save', formData)
       } catch (error) {

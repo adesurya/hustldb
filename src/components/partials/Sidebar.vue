@@ -33,6 +33,17 @@
         
         <li class="nav-item mb-1">
           <router-link 
+            to="/category" 
+            class="sidebar-link d-flex align-items-center"
+            :class="{ active: $route.name === 'Category' }"
+          >
+            <i class="fas fa-tags me-3"></i>
+            Category
+          </router-link>
+        </li>
+
+        <li class="nav-item mb-1">
+          <router-link 
             to="/products" 
             class="sidebar-link d-flex align-items-center"
             :class="{ active: $route.name === 'Products' }"
@@ -41,15 +52,19 @@
             Product
           </router-link>
         </li>
-        
+
         <li class="nav-item mb-1">
-          <a href="#" class="sidebar-link d-flex align-items-center">
-            <i class="fas fa-bullhorn me-3"></i>
-            Campaign
-          </a>
+          <router-link 
+            to="/campaigns" 
+            class="sidebar-link d-flex align-items-center"
+            :class="{ active: $route.name === 'Campaigns' }"
+          >
+            <i class="fas fa-box me-3"></i>
+            Campaigns
+          </router-link>
         </li>
         
-        <li class="nav-item mb-1">
+       <li class="nav-item mb-1">
           <router-link 
             to="/users" 
             class="sidebar-link d-flex align-items-center"

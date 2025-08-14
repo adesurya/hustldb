@@ -1,4 +1,4 @@
-<!-- Updated ProductView.vue with enhanced product management features -->
+<!-- Updated ProductView.vue with fixed functionality -->
 <template>
   <div class="dashboard-layout">
     <!-- Sidebar Component -->
@@ -49,28 +49,10 @@
               <div class="card-body p-3">
                 <div class="d-flex align-items-center justify-content-between">
                   <div class="stat-content">
-                    <div class="stat-icon bg-primary bg-opacity-10 p-2 rounded-circle mb-2">
-                      <i class="fas fa-box text-primary"></i>
-                    </div>
-                    <h3 class="mb-1 fw-bold text-dark">{{ filteredProductsList.length }}</h3>
-                    <h6 class="text-muted mb-0 small">
-                      {{ searchQuery || selectedCategory ? 'Filtered' : 'Total' }} Products
-                    </h6>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="col-xl-3 col-lg-6 col-md-6">
-            <div class="stat-card card h-100 border-0">
-              <div class="card-body p-3">
-                <div class="d-flex align-items-center justify-content-between">
-                  <div class="stat-content">
                     <div class="stat-icon bg-success bg-opacity-10 p-2 rounded-circle mb-2">
                       <i class="fas fa-check-circle text-success"></i>
                     </div>
-                    <h3 class="mb-1 fw-bold text-dark">{{ getActiveProductsCount }}</h3>
+                    <h3 class="mb-1 fw-bold text-dark">{{ statistics.activeProducts || 0 }}</h3>
                     <h6 class="text-muted mb-0 small">Active Products</h6>
                   </div>
                 </div>
@@ -86,7 +68,7 @@
                     <div class="stat-icon bg-warning bg-opacity-10 p-2 rounded-circle mb-2">
                       <i class="fas fa-star text-warning"></i>
                     </div>
-                    <h3 class="mb-1 fw-bold text-dark">{{ getFeaturedProductsCount }}</h3>
+                    <h3 class="mb-1 fw-bold text-dark">{{ statistics.featuredProducts || 0 }}</h3>
                     <h6 class="text-muted mb-0 small">Featured Products</h6>
                   </div>
                 </div>
@@ -297,7 +279,7 @@
                     </li>
                     <li>
                       <a 
-                        @click="viewProduct(product)"
+                        @click="viewProductDetails(product)"
                         class="dropdown-item"
                         href="#"
                       >
@@ -318,8 +300,8 @@
                 </div>
               </div>
 
-              <!-- Product Image -->
-              <div class="product-image">
+              <!-- Product Image - Clickable -->
+              <div class="product-image" @click="viewProductDetails(product)" style="cursor: pointer;" title="Click to view details">
                 <img 
                   :src="getProductImageUrl(product)"
                   :alt="product.title"
@@ -343,12 +325,22 @@
                     {{ product.isActive ? 'Active' : 'Inactive' }}
                   </span>
                 </div>
+                
+                <!-- Hover overlay for better UX -->
+                <div class="product-image-overlay">
+                  <i class="fas fa-eye fa-2x text-white"></i>
+                  <p class="text-white mt-2 mb-0 small">Click to view details</p>
+                </div>
               </div>
 
               <!-- Product Info -->
               <div class="card-body p-3">
+                <!-- Title and Category - Clickable -->
                 <div class="d-flex justify-content-between align-items-start mb-2">
-                  <h6 class="card-title mb-0 fw-bold text-truncate">
+                  <h6 class="card-title mb-0 fw-bold text-truncate product-title-clickable" 
+                      @click="viewProductDetails(product)" 
+                      style="cursor: pointer;"
+                      title="Click to view details">
                     {{ product.title }}
                   </h6>
                 </div>
@@ -362,7 +354,7 @@
                     <div class="product-stat">
                       <span class="stat-label">Price</span>
                       <span class="stat-value text-primary fw-bold">
-                        {{ product.formattedPrice }}
+                        {{ product.formattedPrice || formatPrice(product.price) }}
                       </span>
                     </div>
                   </div>
@@ -399,20 +391,31 @@
 
                 <!-- Action Buttons -->
                 <div class="row g-2">
-                  <div class="col-6">
+                  <div class="col-4">
+                    <button 
+                      @click="viewProductDetails(product)"
+                      class="btn btn-info btn-sm w-100"
+                      title="View Details"
+                    >
+                      <i class="fas fa-eye me-1"></i>View
+                    </button>
+                  </div>
+                  <div class="col-4">
                     <button 
                       @click="editProduct(product)"
                       class="btn btn-primary btn-sm w-100"
+                      title="Edit Product"
                     >
                       <i class="fas fa-edit me-1"></i>Edit
                     </button>
                   </div>
-                  <div class="col-6">
+                  <div class="col-4">
                     <button 
                       @click="confirmDeleteProduct(product)"
                       class="btn btn-danger btn-sm w-100"
+                      title="Delete Product"
                     >
-                      <i class="fas fa-trash me-1"></i>Delete
+                      <i class="fas fa-trash me-1"></i>Del
                     </button>
                   </div>
                 </div>
@@ -619,6 +622,7 @@ export default {
     ...mapGetters('products', [
       'products',
       'categories',
+      'statistics',
       'pagination',
       'filters',
       'isLoading',
@@ -676,16 +680,6 @@ export default {
       }
 
       return filtered
-    },
-
-    // Get active products count from filtered list
-    getActiveProductsCount() {
-      return this.filteredProductsList.filter(product => product.isActive).length
-    },
-
-    // Get featured products count from filtered list
-    getFeaturedProductsCount() {
-      return this.filteredProductsList.filter(product => product.isFeatured).length
     }
   },
 
@@ -693,6 +687,8 @@ export default {
     ...mapActions('products', [
       'fetchProducts',
       'fetchCategories',
+      'fetchStatistics',
+      'fetchProduct',
       'createProduct',
       'updateProduct',
       'deleteProduct',
@@ -710,7 +706,8 @@ export default {
       try {
         await Promise.all([
           this.fetchProducts(),
-          this.fetchCategories()
+          this.fetchCategories(),
+          this.fetchStatistics()
         ])
       } catch (error) {
         console.error('Failed to load products:', error)
@@ -730,8 +727,13 @@ export default {
     },
 
     formatNumber(value) {
-      if (!value) return '0'
+      if (!value && value !== 0) return '0'
       return parseFloat(value).toLocaleString('id-ID')
+    },
+
+    formatPrice(value) {
+      if (!value && value !== 0) return 'Rp 0'
+      return `Rp ${parseFloat(value).toLocaleString('id-ID')}`
     },
 
     // Search functionality
@@ -760,15 +762,6 @@ export default {
       console.log('Filters cleared')
     },
 
-    // Remove old filter methods
-    debounceSearch() {
-      // This method is no longer needed
-    },
-
-    applyFilters() {
-      // This method is no longer needed
-    },
-
     goToPage(page) {
       if (page >= 1 && page <= this.pagination.totalPages) {
         this.setPagination({ currentPage: page })
@@ -791,18 +784,36 @@ export default {
       this.showDetailModal = true
     },
 
-    async handleDeleteProduct(product) {
-      if (confirm(`Are you sure you want to delete "${product.title}"?`)) {
-        try {
-          const response = await this.deleteProduct(product.id)
-          if (response.success) {
-            this.toast.success('Product deleted successfully!')
-            this.selectedProducts = this.selectedProducts.filter(id => id !== product.id)
-          }
-        } catch (error) {
-          console.error('Delete error:', error)
-          this.toast.error(error.message || 'Failed to delete product')
+    // New method to fetch and view product details
+    async viewProductDetails(product) {
+      try {
+        console.log('📖 Viewing product details for ID:', product.id)
+        
+        // Show loading state immediately
+        this.selectedProduct = { 
+          ...product, 
+          isLoading: true,
+          title: product.title // Keep title for modal header
         }
+        this.showDetailModal = true
+        
+        // Fetch detailed product information from API
+        const detailedProduct = await this.fetchProduct(product.id)
+        
+        console.log('📦 Detailed product data:', detailedProduct)
+        
+        // Update the modal with detailed data
+        this.selectedProduct = {
+          ...detailedProduct,
+          isLoading: false
+        }
+        
+        this.toast.success('Product details loaded successfully!')
+      } catch (error) {
+        console.error('❌ Failed to fetch product details:', error)
+        this.toast.error(error.message || 'Failed to load product details')
+        this.showDetailModal = false
+        this.selectedProduct = null
       }
     },
 
@@ -957,29 +968,28 @@ export default {
 
     // Image handling methods
     getProductImageUrl(product) {
-      // Simple approach - return original URL or placeholder
+      // Use the imageUrl from API response if available
       if (product.imageUrl) {
         return product.imageUrl
       }
       
+      // Fallback to constructing URL from image filename
       if (product.image) {
-        // If image is just filename, construct full URL
         if (product.image.startsWith('http')) {
           return product.image
         } else {
-          return `${process.env.VUE_APP_API_URL}/uploads/products/${product.image}`
+          return `https://apihustl.sijago.ai/uploads/products/${product.image}`
         }
       }
       
-      // Return fallback image URL
+      // Return fallback placeholder image
       return 'https://cdn.create.web.com/images/industries/common/images/placeholder-product-image-sq.jpg'
     },
 
     handleImageError(event, product) {
       console.warn('Image failed to load for product:', product.title, 'URL:', event.target.src)
-      console.warn('Error details:', event)
       
-      // Set fallback image
+      // Set fallback placeholder image
       event.target.src = 'https://cdn.create.web.com/images/industries/common/images/placeholder-product-image-sq.jpg'
       
       // Add error class for styling
@@ -989,7 +999,6 @@ export default {
     handleImageLoad(event) {
       // Remove error class if image loads successfully
       event.target.classList.remove('image-error')
-      console.log('Image loaded successfully:', event.target.src)
     }
   }
 }
@@ -1085,17 +1094,7 @@ export default {
   padding-left: 45px;
 }
 
-/* Product Card */
-.product-card {
-  transition: all 0.3s ease;
-  overflow: hidden;
-}
-
-.product-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
-}
-
+/* Product Image Enhancements */
 .product-image {
   position: relative;
   height: 200px;
@@ -1116,6 +1115,33 @@ export default {
 
 .product-card:hover .product-image img:not(.image-error) {
   transform: scale(1.05);
+}
+
+/* Image overlay for clickable indication */
+.product-image-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  z-index: 2;
+}
+
+.product-image:hover .product-image-overlay {
+  opacity: 1;
+}
+
+/* Clickable title enhancement */
+.product-title-clickable:hover {
+  color: #007bff !important;
+  text-decoration: underline;
 }
 
 .product-badges {

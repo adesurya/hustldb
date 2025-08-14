@@ -1,4 +1,4 @@
-<!-- /src/components/modals/ProductDetailModal.vue -->
+<!-- /src/components/modals/ProductDetailModal.vue - Fixed version -->
 <template>
   <div 
     v-if="show"
@@ -20,7 +20,16 @@
         </div>
         
         <div class="modal-body">
-          <div v-if="product" class="row g-4">
+          <!-- Loading State -->
+          <div v-if="product && product.isLoading" class="text-center py-5">
+            <div class="spinner-border text-primary mb-3" role="status">
+              <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="text-muted">Loading product details...</p>
+          </div>
+
+          <!-- Product Content -->
+          <div v-else-if="product" class="row g-4">
             <!-- Product Image -->
             <div class="col-md-5">
               <div class="product-image-container">
@@ -209,6 +218,23 @@
                             </span>
                           </div>
                         </div>
+                      <div class="row g-2">
+                        <div class="col-md-4">
+                          <div class="info-item">
+                            <span class="info-item-label">Created:</span>
+                            <span class="info-item-value">
+                              {{ formatDate(product.createdAt) }}
+                            </span>
+                          </div>
+                        </div>
+                        <div class="col-md-4">
+                          <div class="info-item">
+                            <span class="info-item-label">Updated:</span>
+                            <span class="info-item-value">
+                              {{ formatDate(product.updatedAt) }}
+                            </span>
+                          </div>
+                        </div>
                         <div class="col-md-4">
                           <div class="info-item">
                             <span class="info-item-label">Created By:</span>
@@ -217,6 +243,27 @@
                             </span>
                           </div>
                         </div>
+                      </div>
+                      
+                      <!-- Additional row for extra fields -->
+                      <div class="row g-2 mt-2">
+                        <div class="col-md-6">
+                          <div class="info-item">
+                            <span class="info-item-label">Updated By:</span>
+                            <span class="info-item-value">
+                              {{ product.updatedBy ? `User #${product.updatedBy}` : 'Not updated' }}
+                            </span>
+                          </div>
+                        </div>
+                        <div class="col-md-6">
+                          <div class="info-item">
+                            <span class="info-item-label">Status:</span>
+                            <span class="info-item-value">
+                              {{ product.deletedAt ? 'Deleted' : 'Active' }}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
                       </div>
                     </div>
                   </div>
@@ -312,23 +359,23 @@ export default {
       this.$emit('close')
     },
 
-    // Image handling methods
+    // Image handling methods - Updated to use the correct API base URL
     getProductImageUrl(product) {
-      // Simple approach - return original URL or placeholder
+      // Use the imageUrl from API response if available
       if (product.imageUrl) {
         return product.imageUrl
       }
       
+      // Fallback to constructing URL from image filename
       if (product.image) {
-        // If image is just filename, construct full URL
         if (product.image.startsWith('http')) {
           return product.image
         } else {
-          return `${process.env.VUE_APP_API_URL}/${product.image}`
+          return `https://apihustl.sijago.ai/uploads/products/${product.image}`
         }
       }
       
-      // Return fallback image URL
+      // Return fallback placeholder image
       return 'https://cdn.create.web.com/images/industries/common/images/placeholder-product-image-sq.jpg'
     },
 
@@ -336,7 +383,7 @@ export default {
       console.warn('Image failed to load for product:', product.title, 'URL:', event.target.src)
       console.warn('Error details:', event)
       
-      // Set fallback image
+      // Set fallback placeholder image
       event.target.src = 'https://cdn.create.web.com/images/industries/common/images/placeholder-product-image-sq.jpg'
       
       // Add error class for styling
@@ -635,27 +682,6 @@ export default {
   .modal-dialog {
     margin: 0.5rem;
     max-width: calc(100% - 1rem);
-  }
-  
-  .product-image-container img {
-    max-height: 200px;
-  }
-  
-  .btn {
-    width: 100%;
-    margin-bottom: 0.5rem;
-  }
-  
-  .modal-footer {
-    flex-direction: column-reverse;
-  }
-  
-  .modal-footer .btn:last-child {
-    margin-bottom: 0;
-  }
-  
-  .info-value {
-    font-size: 0.875rem;
   }
   
   .product-title {

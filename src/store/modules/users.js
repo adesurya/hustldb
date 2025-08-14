@@ -1,4 +1,4 @@
-// /src/store/modules/users.js - User management store
+// /src/store/modules/users.js - Fixed User management store
 import userService from '@/services/userService'
 
 const state = {
@@ -7,11 +7,10 @@ const state = {
   currentUser: null,
   pagination: {
     currentPage: 1,
-    itemsPerPage: 10,
-    totalItems: 0,
     totalPages: 1,
-    hasNextPage: false,
-    hasPrevPage: false
+    totalUsers: 0,
+    hasNext: false,
+    hasPrev: false
   },
   filters: {
     search: '',
@@ -108,17 +107,25 @@ const actions = {
     try {
       const params = {
         page: state.pagination.currentPage,
-        limit: state.pagination.itemsPerPage,
+        limit: state.pagination.itemsPerPage || 10,
         ...state.filters
       }
 
       const response = await userService.getUsers(params)
       
       if (response.success) {
-        commit('SET_USERS', response.data.users || response.data)
-        if (response.data.pagination) {
-          commit('SET_PAGINATION', response.data.pagination)
-        }
+        // Handle the actual API response structure
+        const users = response.data.users || []
+        const pagination = response.data.pagination || {}
+        
+        commit('SET_USERS', users)
+        commit('SET_PAGINATION', {
+          currentPage: pagination.currentPage || 1,
+          totalPages: pagination.totalPages || 1,
+          totalUsers: pagination.totalUsers || users.length,
+          hasNext: pagination.hasNext || false,
+          hasPrev: pagination.hasPrev || false
+        })
       }
     } catch (error) {
       console.error('Failed to fetch users:', error)
@@ -133,7 +140,7 @@ const actions = {
     try {
       const response = await userService.getBannedUsers()
       if (response.success) {
-        commit('SET_BANNED_USERS', response.data.bannedUsers || response.data)
+        commit('SET_BANNED_USERS', response.data.bannedUsers || [])
       }
     } catch (error) {
       console.error('Failed to fetch banned users:', error)
@@ -148,8 +155,8 @@ const actions = {
     try {
       const response = await userService.getUser(userId)
       if (response.success) {
-        commit('SET_CURRENT_USER', response.data)
-        return response.data
+        commit('SET_CURRENT_USER', response.data.user || response.data)
+        return response.data.user || response.data
       }
     } catch (error) {
       console.error('Failed to fetch user:', error)
@@ -164,7 +171,9 @@ const actions = {
     try {
       const response = await userService.createUser(userData)
       if (response.success) {
+        // Add to local state immediately
         commit('ADD_USER', response.data.user || response.data)
+        // Refresh the list to ensure consistency
         await dispatch('fetchUsers')
         return response
       }
@@ -182,7 +191,9 @@ const actions = {
     try {
       const response = await userService.updateUser(id, userData)
       if (response.success) {
+        // Update local state immediately
         commit('UPDATE_USER', response.data.user || response.data)
+        // Refresh the list to ensure consistency
         await dispatch('fetchUsers')
         return response
       }
@@ -260,6 +271,19 @@ const actions = {
     }
   },
 
+  async checkBanStatus({ commit }, userId) {
+    try {
+      const response = await userService.checkBanStatus(userId)
+      if (response.success) {
+        return response.data.banStatus || response.data
+      }
+      throw new Error(response.message || 'Failed to check ban status')
+    } catch (error) {
+      console.error('Failed to check ban status:', error)
+      throw error
+    }
+  },
+
   async bulkDeleteUsers({ commit }, userIds) {
     commit('SET_SUBMITTING', true)
     try {
@@ -331,9 +355,11 @@ const getters = {
       
       const matchesRole = !state.filters.role || user.role === state.filters.role
       
+      // Check if user is truly active (not deleted and isActive = true)
+      const isUserActive = user.isActive && !user.deleted_at
       const matchesStatus = !state.filters.status || 
-        (state.filters.status === 'active' && user.isActive) ||
-        (state.filters.status === 'inactive' && !user.isActive)
+        (state.filters.status === 'active' && isUserActive) ||
+        (state.filters.status === 'inactive' && !isUserActive)
       
       const matchesVerified = !state.filters.verified ||
         (state.filters.verified === 'verified' && user.isVerified) ||
@@ -343,8 +369,9 @@ const getters = {
     })
   },
 
-  activeUsers: (state) => state.users.filter(u => u.isActive),
-  inactiveUsers: (state) => state.users.filter(u => !u.isActive),
+  activeUsers: (state) => state.users.filter(u => u.isActive && !u.deleted_at),
+  inactiveUsers: (state) => state.users.filter(u => !u.isActive || u.deleted_at),
+  deletedUsers: (state) => state.users.filter(u => u.deleted_at),
   verifiedUsers: (state) => state.users.filter(u => u.isVerified),
   unverifiedUsers: (state) => state.users.filter(u => !u.isVerified),
   adminUsers: (state) => state.users.filter(u => u.role === 'admin'),

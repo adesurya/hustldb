@@ -1,4 +1,4 @@
-<!-- /src/components/modals/CampaignProductsModal.vue -->
+<!-- /src/components/modals/CampaignProductsModal.vue - Simple and Functional -->
 <template>
   <div 
     v-if="show"
@@ -10,6 +10,7 @@
       <div class="modal-content border-0">
         <div class="modal-header border-0 pb-0">
           <h5 class="modal-title fw-bold">
+            <i class="fas fa-box-open text-primary me-2"></i>
             Manage Campaign Products
           </h5>
           <button 
@@ -40,13 +41,25 @@
                 <h6 class="mb-0">Campaign Products</h6>
                 <small class="text-muted">Manage products associated with this campaign</small>
               </div>
-              <button 
-                @click="showAddProducts = true"
-                class="btn btn-primary btn-sm"
-              >
-                <i class="fas fa-plus me-2"></i>
-                Add Products
-              </button>
+              <div class="btn-group">
+                <button 
+                  @click="showAddProducts = !showAddProducts"
+                  class="btn btn-primary btn-sm"
+                  :disabled="isSubmitting"
+                >
+                  <i class="fas fa-plus me-2"></i>
+                  {{ showAddProducts ? 'Hide' : 'Add Products' }}
+                </button>
+                <button 
+                  @click="handleRefresh"
+                  class="btn btn-outline-primary btn-sm"
+                  :disabled="isSubmitting"
+                >
+                  <i v-if="isSubmitting" class="fas fa-spinner fa-spin me-1"></i>
+                  <i v-else class="fas fa-sync-alt me-1"></i>
+                  Refresh
+                </button>
+              </div>
             </div>
 
             <!-- Campaign Products List -->
@@ -63,15 +76,23 @@
                   </div>
                   
                   <div class="products-list">
-                    <div v-if="isLoadingCampaignProducts" class="text-center py-4">
+                    <div v-if="isLoading" class="text-center py-4">
                       <div class="spinner-border spinner-border-sm" role="status">
                         <span class="visually-hidden">Loading...</span>
                       </div>
+                      <p class="text-muted mt-2">Loading products...</p>
                     </div>
                     
                     <div v-else-if="campaignProducts.length === 0" class="empty-state py-4">
                       <i class="fas fa-box fa-2x text-muted mb-2"></i>
                       <p class="text-muted mb-0">No products in this campaign</p>
+                      <button 
+                        @click="showAddProducts = true"
+                        class="btn btn-sm btn-primary mt-2"
+                      >
+                        <i class="fas fa-plus me-1"></i>
+                        Add First Product
+                      </button>
                     </div>
                     
                     <div v-else>
@@ -85,7 +106,7 @@
                             :src="getProductImageUrl(product)"
                             :alt="product.title"
                             class="product-image me-3"
-                            @error="handleImageError($event, product)"
+                            @error="handleImageError($event)"
                           >
                           <div class="flex-grow-1">
                             <h6 class="mb-1 product-title">{{ product.title }}</h6>
@@ -94,13 +115,13 @@
                               <span class="badge bg-light text-dark me-1">
                                 {{ formatPrice(product.price) }}
                               </span>
-                              <span class="badge bg-light text-dark">
-                                {{ product.points }} pts
+                              <span class="badge bg-light text-dark me-1">
+                                {{ product.points || 0 }} pts
                               </span>
                             </div>
                           </div>
                           <button 
-                            @click="removeProductFromCampaign(product.id)"
+                            @click="removeProduct(product.id, product.title)"
                             class="btn btn-sm btn-outline-danger"
                             :disabled="isSubmitting"
                           >
@@ -113,7 +134,7 @@
                 </div>
               </div>
 
-              <!-- Available Products (when adding) -->
+              <!-- Available Products -->
               <div v-if="showAddProducts" class="col-md-6">
                 <div class="products-section">
                   <div class="section-header">
@@ -136,28 +157,37 @@
                       type="text"
                       class="form-control form-control-sm"
                       placeholder="Search available products..."
-                      @input="searchProducts"
                     >
                   </div>
 
                   <!-- Selected Products for Addition -->
-                  <div v-if="selectedProductsForAdd.length > 0" class="selected-products mb-3">
+                  <div v-if="selectedProducts.length > 0" class="selected-products mb-3">
                     <div class="d-flex justify-content-between align-items-center mb-2">
-                      <small class="text-muted">Selected: {{ selectedProductsForAdd.length }}</small>
-                      <button 
-                        @click="addSelectedProducts"
-                        class="btn btn-sm btn-success"
-                        :disabled="isSubmitting"
-                      >
-                        <i v-if="isSubmitting" class="fas fa-spinner fa-spin me-1"></i>
-                        <i v-else class="fas fa-plus me-1"></i>
-                        Add Selected
-                      </button>
+                      <small class="text-muted fw-semibold">
+                        Selected: {{ selectedProducts.length }}
+                      </small>
+                      <div class="btn-group btn-group-sm">
+                        <button 
+                          @click="addSelectedProducts"
+                          class="btn btn-success"
+                          :disabled="isSubmitting"
+                        >
+                          <i v-if="isSubmitting" class="fas fa-spinner fa-spin me-1"></i>
+                          <i v-else class="fas fa-plus me-1"></i>
+                          Add Selected
+                        </button>
+                        <button 
+                          @click="clearSelection"
+                          class="btn btn-outline-secondary"
+                        >
+                          Clear
+                        </button>
+                      </div>
                     </div>
                   </div>
                   
                   <div class="products-list">
-                    <div v-if="isLoadingProducts" class="text-center py-4">
+                    <div v-if="isLoading" class="text-center py-4">
                       <div class="spinner-border spinner-border-sm" role="status">
                         <span class="visually-hidden">Loading...</span>
                       </div>
@@ -165,7 +195,9 @@
                     
                     <div v-else-if="filteredAvailableProducts.length === 0" class="empty-state py-4">
                       <i class="fas fa-search fa-2x text-muted mb-2"></i>
-                      <p class="text-muted mb-0">No products available</p>
+                      <p class="text-muted mb-0">
+                        {{ productSearch ? 'No products match your search' : 'No products available' }}
+                      </p>
                     </div>
                     
                     <div v-else>
@@ -173,13 +205,13 @@
                         v-for="product in filteredAvailableProducts" 
                         :key="product.id"
                         class="product-item selectable"
-                        :class="{ selected: selectedProductsForAdd.includes(product.id) }"
+                        :class="{ selected: selectedProducts.includes(product.id) }"
                         @click="toggleProductSelection(product.id)"
                       >
                         <div class="d-flex align-items-center">
                           <div class="form-check me-2">
                             <input
-                              v-model="selectedProductsForAdd"
+                              v-model="selectedProducts"
                               :value="product.id"
                               type="checkbox"
                               class="form-check-input"
@@ -190,7 +222,7 @@
                             :src="getProductImageUrl(product)"
                             :alt="product.title"
                             class="product-image me-3"
-                            @error="handleImageError($event, product)"
+                            @error="handleImageError($event)"
                           >
                           <div class="flex-grow-1">
                             <h6 class="mb-1 product-title">{{ product.title }}</h6>
@@ -199,8 +231,8 @@
                               <span class="badge bg-light text-dark me-1">
                                 {{ formatPrice(product.price) }}
                               </span>
-                              <span class="badge bg-light text-dark">
-                                {{ product.points }} pts
+                              <span class="badge bg-light text-dark me-1">
+                                {{ product.points || 0 }} pts
                               </span>
                             </div>
                           </div>
@@ -222,14 +254,6 @@
           >
             Close
           </button>
-          <button 
-            @click="handleRefresh"
-            type="button" 
-            class="btn btn-primary"
-          >
-            <i class="fas fa-sync-alt me-2"></i>
-            Refresh
-          </button>
         </div>
       </div>
     </div>
@@ -239,7 +263,6 @@
 <script>
 import { useToast } from 'vue-toastification'
 import campaignService from '@/services/campaignService'
-import productService from '@/services/productService'
 
 export default {
   name: 'CampaignProductsModal',
@@ -266,10 +289,9 @@ export default {
     return {
       campaignProducts: [],
       availableProducts: [],
-      selectedProductsForAdd: [],
+      selectedProducts: [],
       showAddProducts: false,
-      isLoadingCampaignProducts: false,
-      isLoadingProducts: false,
+      isLoading: false,
       isSubmitting: false,
       productSearch: ''
     }
@@ -289,7 +311,7 @@ export default {
         )
       }
 
-      return filtered.slice(0, 50) // Limit for performance
+      return filtered.slice(0, 50)
     }
   },
 
@@ -302,15 +324,6 @@ export default {
         } else {
           document.body.style.overflow = 'auto'
           this.resetModal()
-        }
-      },
-      immediate: true
-    },
-
-    campaign: {
-      handler() {
-        if (this.show && this.campaign) {
-          this.initializeModal()
         }
       },
       immediate: true
@@ -338,14 +351,14 @@ export default {
 
     resetModal() {
       this.showAddProducts = false
-      this.selectedProductsForAdd = []
+      this.selectedProducts = []
       this.productSearch = ''
     },
 
     async loadCampaignProducts() {
       if (!this.campaign?.id) return
       
-      this.isLoadingCampaignProducts = true
+      this.isLoading = true
       try {
         const response = await campaignService.getCampaignProducts(this.campaign.id)
         if (response.success) {
@@ -354,65 +367,87 @@ export default {
       } catch (error) {
         console.error('Failed to load campaign products:', error)
         this.campaignProducts = []
+        this.toast.error('Failed to load campaign products')
       } finally {
-        this.isLoadingCampaignProducts = false
+        this.isLoading = false
       }
     },
 
     async loadAvailableProducts() {
-      this.isLoadingProducts = true
+      this.isLoading = true
       try {
-        const response = await productService.getProducts({ limit: 100 })
-        if (response.success) {
-          this.availableProducts = response.data || []
+        const response = await fetch(`${process.env.VUE_APP_API_URL || 'https://apihustl.sijago.ai'}/api/v1/products?limit=100`, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+          }
+        })
+        
+        if (response.ok) {
+          const data = await response.json()
+          this.availableProducts = data.data || []
+        } else {
+          this.availableProducts = []
         }
       } catch (error) {
         console.error('Failed to load products:', error)
         this.availableProducts = []
+        this.toast.error('Failed to load available products')
       } finally {
-        this.isLoadingProducts = false
+        this.isLoading = false
       }
-    },
-
-    searchProducts() {
-      // Debounce is handled by computed property
     },
 
     toggleProductSelection(productId) {
-      const index = this.selectedProductsForAdd.indexOf(productId)
+      const index = this.selectedProducts.indexOf(productId)
       if (index > -1) {
-        this.selectedProductsForAdd.splice(index, 1)
+        this.selectedProducts.splice(index, 1)
       } else {
-        this.selectedProductsForAdd.push(productId)
+        this.selectedProducts.push(productId)
       }
     },
 
+    clearSelection() {
+      this.selectedProducts = []
+    },
+
     async addSelectedProducts() {
-      if (this.selectedProductsForAdd.length === 0) return
+      if (this.selectedProducts.length === 0) return
 
       this.isSubmitting = true
       try {
         const response = await campaignService.addProductsToCampaign(
           this.campaign.id,
-          this.selectedProductsForAdd
+          this.selectedProducts
         )
         
         if (response.success) {
-          this.toast.success(`Added ${this.selectedProductsForAdd.length} product(s) to campaign`)
-          this.selectedProductsForAdd = []
+          const successCount = response.data.success ? response.data.success.length : 0
+          const failedCount = response.data.failed ? response.data.failed.length : 0
+          
+          if (successCount > 0) {
+            this.toast.success(`Added ${successCount} product(s) to campaign`)
+          }
+          
+          if (failedCount > 0) {
+            this.toast.warning(`${failedCount} product(s) could not be added`)
+          }
+          
+          this.selectedProducts = []
           await this.loadCampaignProducts()
           this.$emit('refresh')
         }
       } catch (error) {
         console.error('Failed to add products:', error)
-        this.toast.error(error.message || 'Failed to add products to campaign')
+        this.toast.error('Failed to add products to campaign')
       } finally {
         this.isSubmitting = false
       }
     },
 
-    async removeProductFromCampaign(productId) {
-      if (!confirm('Are you sure you want to remove this product from the campaign?')) {
+    async removeProduct(productId, productTitle) {
+      if (!confirm(`Are you sure you want to remove "${productTitle}" from this campaign?`)) {
         return
       }
 
@@ -430,7 +465,7 @@ export default {
         }
       } catch (error) {
         console.error('Failed to remove product:', error)
-        this.toast.error(error.message || 'Failed to remove product from campaign')
+        this.toast.error('Failed to remove product from campaign')
       } finally {
         this.isSubmitting = false
       }
@@ -446,8 +481,9 @@ export default {
       return `Rp ${parseFloat(value).toLocaleString('id-ID')}`
     },
 
-    // Image handling methods
     getProductImageUrl(product) {
+      if (!product) return this.getPlaceholderImage()
+      
       if (product.imageUrl) {
         return product.imageUrl
       }
@@ -456,16 +492,19 @@ export default {
         if (product.image.startsWith('http')) {
           return product.image
         } else {
-          return `${process.env.VUE_APP_API_URL}/uploads/products/${product.image}`
+          return `https://apihustl.sijago.ai/uploads/products/${product.image}`
         }
       }
       
+      return this.getPlaceholderImage()
+    },
+
+    getPlaceholderImage() {
       return 'https://cdn.create.web.com/images/industries/common/images/placeholder-product-image-sq.jpg'
     },
 
-    handleImageError(event, product) {
-      console.warn('Image failed to load for product:', product.title)
-      event.target.src = 'https://cdn.create.web.com/images/industries/common/images/placeholder-product-image-sq.jpg'
+    handleImageError(event) {
+      event.target.src = this.getPlaceholderImage()
       event.target.classList.add('image-error')
     }
   }
@@ -524,7 +563,7 @@ export default {
 
 .section-header {
   display: flex;
-  justify-content: between;
+  justify-content: space-between;
   align-items: center;
   padding: 1rem;
   border-bottom: 1px solid #e9ecef;
@@ -562,6 +601,7 @@ export default {
 .product-item.selectable.selected {
   background-color: #e3f2fd;
   border-color: #007bff;
+  box-shadow: 0 2px 8px rgba(0, 123, 255, 0.15);
 }
 
 .product-image {
@@ -600,10 +640,6 @@ export default {
   padding: 0.75rem;
 }
 
-.search-products input {
-  border-radius: 6px;
-}
-
 .badge {
   font-size: 0.7rem;
   padding: 0.25rem 0.5rem;
@@ -638,7 +674,6 @@ export default {
 .btn-primary:hover:not(:disabled) {
   background-color: #0056b3;
   border-color: #0056b3;
-  transform: translateY(-1px);
 }
 
 .btn-success {
@@ -670,6 +705,17 @@ export default {
 .btn-outline-secondary:hover:not(:disabled) {
   background-color: #6c757d;
   border-color: #6c757d;
+  color: white;
+}
+
+.btn-outline-primary {
+  color: #007bff;
+  border-color: #007bff;
+}
+
+.btn-outline-primary:hover:not(:disabled) {
+  background-color: #007bff;
+  border-color: #007bff;
   color: white;
 }
 
@@ -733,23 +779,10 @@ export default {
 }
 
 /* Responsive Design */
-@media (max-width: 1200px) {
-  .modal-dialog {
-    max-width: 90%;
-  }
-}
-
 @media (max-width: 768px) {
   .modal-dialog {
     margin: 1rem;
     max-width: calc(100% - 2rem);
-  }
-  
-  .modal-header,
-  .modal-body,
-  .modal-footer {
-    padding-left: 1rem;
-    padding-right: 1rem;
   }
   
   .modal-body {
@@ -783,56 +816,5 @@ export default {
   .modal-footer {
     flex-direction: column-reverse;
   }
-  
-  .modal-footer .btn:last-child {
-    margin-bottom: 0;
-  }
-  
-  .product-item {
-    padding: 0.5rem;
-  }
-  
-  .section-header {
-    padding: 0.75rem;
-  }
-}
-
-/* Custom scrollbar */
-.products-list::-webkit-scrollbar,
-.modal-body::-webkit-scrollbar {
-  width: 6px;
-}
-
-.products-list::-webkit-scrollbar-track,
-.modal-body::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 3px;
-}
-
-.products-list::-webkit-scrollbar-thumb,
-.modal-body::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 3px;
-}
-
-.products-list::-webkit-scrollbar-thumb:hover,
-.modal-body::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
-}
-
-/* Animation */
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.product-item {
-  animation: fadeInUp 0.3s ease-out;
 }
 </style>

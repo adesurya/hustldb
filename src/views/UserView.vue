@@ -1,4 +1,4 @@
-<!-- Updated UserView.vue with enhanced user management features -->
+<!-- Enhanced UserView.vue with ban status check and improved functionality -->
 <template>
   <div class="dashboard-layout">
     <!-- Sidebar Component -->
@@ -33,14 +33,24 @@
             <h2 class="mb-1 fw-bold text-dark">User Management</h2>
             <p class="text-muted mb-0">Manage user accounts and permissions</p>
           </div>
-          <button 
-            @click.prevent="openAddUserModal"
-            class="btn btn-primary d-flex align-items-center"
-            type="button"
-          >
-            <i class="fas fa-plus me-2"></i>
-            Add User
-          </button>
+          <div class="d-flex gap-2">
+            <button 
+              @click.prevent="showBannedUsersModal"
+              class="btn btn-warning d-flex align-items-center"
+              type="button"
+            >
+              <i class="fas fa-ban me-2"></i>
+              Banned Users
+            </button>
+            <button 
+              @click.prevent="openAddUserModal"
+              class="btn btn-primary d-flex align-items-center"
+              type="button"
+            >
+              <i class="fas fa-plus me-2"></i>
+              Add User
+            </button>
+          </div>
         </div>
 
         <!-- Statistics Cards -->
@@ -100,11 +110,11 @@
               <div class="card-body p-3">
                 <div class="d-flex align-items-center justify-content-between">
                   <div class="stat-content">
-                    <div class="stat-icon bg-warning bg-opacity-10 p-2 rounded-circle mb-2">
-                      <i class="fas fa-user-cog text-warning"></i>
+                    <div class="stat-icon bg-secondary bg-opacity-10 p-2 rounded-circle mb-2">
+                      <i class="fas fa-user-times text-secondary"></i>
                     </div>
-                    <h3 class="mb-1 fw-bold text-dark">{{ getAdminUsersCount }}</h3>
-                    <h6 class="text-muted mb-0 small">Admin Users</h6>
+                    <h3 class="mb-1 fw-bold text-dark">{{ getInactiveUsersCount }}</h3>
+                    <h6 class="text-muted mb-0 small">Inactive Users</h6>
                   </div>
                 </div>
               </div>
@@ -330,9 +340,18 @@
                       <small class="text-muted">points</small>
                     </td>
                     <td>
-                      <span class="badge" :class="user.isActive ? 'bg-success' : 'bg-danger'">
-                        {{ user.isActive ? 'Active' : 'Inactive' }}
-                      </span>
+                      <div class="d-flex flex-column">
+                        <span v-if="user.deleted_at" class="badge bg-danger mb-1">
+                          <i class="fas fa-trash me-1"></i>Deleted
+                        </span>
+                        <span v-else class="badge" :class="getUserStatusBadgeClass(user)">
+                          <i :class="getUserStatusIcon(user)" class="me-1"></i>
+                          {{ getUserStatusText(user) }}
+                        </span>
+                        <small v-if="user.deleted_at" class="text-muted">
+                          {{ formatDate(user.deleted_at) }}
+                        </small>
+                      </div>
                     </td>
                     <td>
                       <div v-if="user.lastLogin" class="text-dark">
@@ -369,6 +388,13 @@
                             <i class="fas fa-edit me-2"></i>Edit
                           </button>
                           <button 
+                            @click.stop="checkBanStatusAction(user)"
+                            class="dropdown-item"
+                            type="button"
+                          >
+                            <i class="fas fa-info-circle me-2"></i>Check Ban Status
+                          </button>
+                          <button 
                             @click.stop="resetPasswordAction(user)"
                             class="dropdown-item"
                             type="button"
@@ -377,7 +403,7 @@
                           </button>
                           <hr class="dropdown-divider">
                           <button 
-                            v-if="user.isActive"
+                            v-if="!user.deleted_at && user.isActive"
                             @click.stop="banUserAction(user)"
                             class="dropdown-item text-warning"
                             type="button"
@@ -385,20 +411,37 @@
                             <i class="fas fa-ban me-2"></i>Ban User
                           </button>
                           <button 
-                            v-else
+                            v-else-if="!user.deleted_at && !user.isActive"
                             @click.stop="unbanUserAction(user)"
                             class="dropdown-item text-success"
                             type="button"
                           >
                             <i class="fas fa-check-circle me-2"></i>Unban User
                           </button>
+                          <button 
+                            v-if="user.deleted_at"
+                            @click.stop="restoreUserAction(user)"
+                            class="dropdown-item text-info"
+                            type="button"
+                          >
+                            <i class="fas fa-undo me-2"></i>Restore User
+                          </button>
                           <hr class="dropdown-divider">
                           <button 
+                            v-if="!user.deleted_at"
                             @click.stop="deleteUserAction(user)"
                             class="dropdown-item text-danger"
                             type="button"
                           >
                             <i class="fas fa-trash me-2"></i>Delete
+                          </button>
+                          <button 
+                            v-else
+                            @click.stop="permanentDeleteAction(user)"
+                            class="dropdown-item text-danger"
+                            type="button"
+                          >
+                            <i class="fas fa-times me-2"></i>Permanent Delete
                           </button>
                         </div>
                       </div>
@@ -414,11 +457,11 @@
         <div v-if="pagination.totalPages > 1" class="d-flex justify-content-center mt-4">
           <nav>
             <ul class="pagination">
-              <li class="page-item" :class="{ disabled: !pagination.hasPrevPage }">
+              <li class="page-item" :class="{ disabled: !pagination.hasPrev }">
                 <button 
                   @click="goToPage(pagination.currentPage - 1)"
                   class="page-link"
-                  :disabled="!pagination.hasPrevPage"
+                  :disabled="!pagination.hasPrev"
                 >
                   Previous
                 </button>
@@ -438,11 +481,11 @@
                 </button>
               </li>
               
-              <li class="page-item" :class="{ disabled: !pagination.hasNextPage }">
+              <li class="page-item" :class="{ disabled: !pagination.hasNext }">
                 <button 
                   @click="goToPage(pagination.currentPage + 1)"
                   class="page-link"
-                  :disabled="!pagination.hasNextPage"
+                  :disabled="!pagination.hasNext"
                 >
                   Next
                 </button>
@@ -474,6 +517,248 @@
       @close="showDetailModal = false"
       @edit="editUserFromDetail"
     />
+
+    <!-- Banned Users Modal -->
+    <div 
+      v-if="showBannedModal"
+      class="modal fade show d-block"
+      tabindex="-1"
+      style="background-color: rgba(0,0,0,0.5);"
+    >
+      <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content border-0">
+          <div class="modal-header border-0 pb-0">
+            <h5 class="modal-title fw-bold text-warning">
+              <i class="fas fa-ban me-2"></i>
+              Banned Users
+            </h5>
+            <button 
+              @click="showBannedModal = false"
+              type="button" 
+              class="btn-close"
+            ></button>
+          </div>
+          
+          <div class="modal-body">
+            <div v-if="isFetchingBanned" class="text-center py-4">
+              <div class="spinner-border text-warning" role="status">
+                <span class="visually-hidden">Loading banned users...</span>
+              </div>
+            </div>
+
+            <div v-else-if="bannedUsers.length === 0" class="text-center py-4">
+              <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
+              <h5 class="text-muted">No banned users</h5>
+              <p class="text-muted">All users are currently active</p>
+            </div>
+
+            <div v-else class="table-responsive">
+              <table class="table table-hover">
+                <thead class="table-light">
+                  <tr>
+                    <th>User</th>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Banned Duration</th>
+                    <th>Account Age</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="user in bannedUsers" :key="user.id">
+                    <td>
+                      <div class="d-flex align-items-center">
+                        <div class="user-avatar me-3">
+                          <div class="bg-danger rounded-circle d-flex align-items-center justify-content-center text-white fw-bold"
+                               style="width: 32px; height: 32px; font-size: 12px;">
+                            {{ getUserInitials(user.username) }}
+                          </div>
+                        </div>
+                        <div>
+                          <div class="fw-semibold">{{ user.username }}</div>
+                          <small class="text-muted">ID: {{ user.id }}</small>
+                        </div>
+                      </div>
+                    </td>
+                    <td>{{ user.email }}</td>
+                    <td>
+                      <span class="badge" :class="getRoleBadgeClass(user.role)">
+                        {{ user.role }}
+                      </span>
+                    </td>
+                    <td>
+                      <span v-if="user.bannedDuration >= 0" class="text-warning">
+                        {{ user.bannedDuration }} days
+                      </span>
+                      <span v-else class="text-muted">-</span>
+                    </td>
+                    <td>
+                      <span v-if="user.accountAge >= 0" class="text-info">
+                        {{ user.accountAge }} days
+                      </span>
+                      <span v-else class="text-muted">-</span>
+                    </td>
+                    <td>
+                      <button 
+                        @click="unbanUserFromList(user)"
+                        class="btn btn-sm btn-success me-2"
+                        type="button"
+                      >
+                        <i class="fas fa-check-circle me-1"></i>
+                        Unban
+                      </button>
+                      <button 
+                        @click="checkBanStatusFromList(user)"
+                        class="btn btn-sm btn-info"
+                        type="button"
+                      >
+                        <i class="fas fa-info-circle me-1"></i>
+                        Details
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          
+          <div class="modal-footer border-0 pt-0">
+            <button 
+              @click="showBannedModal = false"
+              type="button" 
+              class="btn btn-light"
+            >
+              Close
+            </button>
+            <button 
+              @click="refreshBannedUsers"
+              type="button" 
+              class="btn btn-outline-warning"
+              :disabled="isFetchingBanned"
+            >
+              <i class="fas fa-refresh me-2"></i>
+              Refresh
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Ban Status Modal -->
+    <div 
+      v-if="showBanStatusModal"
+      class="modal fade show d-block"
+      tabindex="-1"
+      style="background-color: rgba(0,0,0,0.5);"
+    >
+      <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0">
+          <div class="modal-header border-0 pb-0">
+            <h5 class="modal-title fw-bold text-info">
+              <i class="fas fa-info-circle me-2"></i>
+              Ban Status Information
+            </h5>
+            <button 
+              @click="showBanStatusModal = false"
+              type="button" 
+              class="btn-close"
+            ></button>
+          </div>
+          
+          <div class="modal-body">
+            <div v-if="isCheckingBanStatus" class="text-center py-4">
+              <div class="spinner-border text-info" role="status">
+                <span class="visually-hidden">Checking ban status...</span>
+              </div>
+            </div>
+
+            <div v-else-if="banStatusInfo" class="ban-status-details">
+              <div class="card bg-light border mb-3">
+                <div class="card-body">
+                  <div class="row g-3">
+                    <div class="col-md-6">
+                      <div class="info-item">
+                        <label class="form-label fw-semibold">User ID</label>
+                        <div class="text-dark">#{{ banStatusInfo.userId }}</div>
+                      </div>
+                    </div>
+                    <div class="col-md-6">
+                      <div class="info-item">
+                        <label class="form-label fw-semibold">Username</label>
+                        <div class="text-dark">{{ banStatusInfo.username }}</div>
+                      </div>
+                    </div>
+                    <div class="col-md-6">
+                      <div class="info-item">
+                        <label class="form-label fw-semibold">Email</label>
+                        <div class="text-dark">{{ banStatusInfo.email }}</div>
+                      </div>
+                    </div>
+                    <div class="col-md-6">
+                      <div class="info-item">
+                        <label class="form-label fw-semibold">Ban Status</label>
+                        <div>
+                          <span class="badge" :class="banStatusInfo.isBanned ? 'bg-danger' : 'bg-success'">
+                            {{ banStatusInfo.isBanned ? 'Banned' : 'Active' }}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="col-md-6">
+                      <div class="info-item">
+                        <label class="form-label fw-semibold">Account Created</label>
+                        <div class="text-dark">{{ formatDate(banStatusInfo.accountCreated) }}</div>
+                      </div>
+                    </div>
+                    <div class="col-md-6">
+                      <div class="info-item">
+                        <label class="form-label fw-semibold">Last Status Change</label>
+                        <div class="text-dark">{{ formatDate(banStatusInfo.lastStatusChange) }}</div>
+                      </div>
+                    </div>
+                    <div class="col-12">
+                      <div class="info-item">
+                        <label class="form-label fw-semibold">Banned Duration</label>
+                        <div class="text-dark">
+                          <span v-if="banStatusInfo.bannedDuration >= 0">
+                            {{ banStatusInfo.bannedDuration }} days
+                          </span>
+                          <span v-else class="text-muted">Not applicable</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="col-12">
+                      <div class="info-item">
+                        <label class="form-label fw-semibold">Message</label>
+                        <div class="alert alert-info">
+                          {{ banStatusInfo.message }}
+                        </div>
+                      </div>
+                    </div>
+                    <div class="col-12">
+                      <div class="info-item">
+                        <label class="form-label fw-semibold">Support Contact</label>
+                        <div class="text-dark">{{ banStatusInfo.supportContact }}</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="modal-footer border-0 pt-0">
+            <button 
+              @click="showBanStatusModal = false"
+              type="button" 
+              class="btn btn-light"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- Reset Password Modal -->
     <div 
@@ -745,7 +1030,9 @@
           </div>
           
           <div class="modal-body">
-            <p class="mb-3">Are you sure you want to delete this user?</p>
+            <p class="mb-3">
+              {{ isPermanentDelete ? 'Are you sure you want to permanently delete this user?' : 'Are you sure you want to delete this user?' }}
+            </p>
             
             <div v-if="userToDelete" class="alert alert-light border">
               <div class="d-flex align-items-center">
@@ -764,7 +1051,9 @@
             
             <p class="text-muted small mb-0">
               <i class="fas fa-info-circle me-1"></i>
-              This action cannot be undone. All user data will be permanently deleted.
+              {{ isPermanentDelete 
+                 ? 'This action cannot be undone. All user data will be permanently deleted from the system.' 
+                 : 'This action will soft delete the user. The user can be restored later if needed.' }}
             </p>
           </div>
           
@@ -784,7 +1073,81 @@
             >
               <i v-if="isDeleting" class="fas fa-spinner fa-spin me-2"></i>
               <i v-else class="fas fa-trash me-2"></i>
-              {{ isDeleting ? 'Deleting...' : 'Delete User' }}
+              {{ isDeleting ? 'Deleting...' : (isPermanentDelete ? 'Permanent Delete' : 'Delete User') }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Restore User Modal -->
+    <div 
+      v-if="showRestoreModal"
+      class="modal fade show d-block"
+      tabindex="-1"
+      style="background-color: rgba(0,0,0,0.5);"
+    >
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0">
+          <div class="modal-header border-0 pb-0">
+            <h5 class="modal-title fw-bold text-info">
+              <i class="fas fa-undo me-2"></i>
+              Restore User
+            </h5>
+            <button 
+              @click="showRestoreModal = false"
+              type="button" 
+              class="btn-close"
+            ></button>
+          </div>
+          
+          <div class="modal-body">
+            <p class="mb-3">Are you sure you want to restore this deleted user?</p>
+            
+            <div v-if="userToRestore" class="alert alert-light border">
+              <div class="d-flex align-items-center">
+                <div class="user-avatar me-3">
+                  <div class="bg-info rounded-circle d-flex align-items-center justify-content-center text-white fw-bold"
+                       style="width: 40px; height: 40px;">
+                    {{ getUserInitials(userToRestore.username) }}
+                  </div>
+                </div>
+                <div>
+                  <h6 class="mb-1 fw-bold">{{ userToRestore.username }}</h6>
+                  <small class="text-muted">{{ userToRestore.email }}</small>
+                  <div class="mt-1">
+                    <span class="badge bg-danger">
+                      <i class="fas fa-trash me-1"></i>
+                      Deleted: {{ formatDate(userToRestore.deleted_at) }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <p class="text-muted small mb-0">
+              <i class="fas fa-info-circle me-1"></i>
+              This will restore the user account and set it back to active status.
+            </p>
+          </div>
+          
+          <div class="modal-footer border-0 pt-0">
+            <button 
+              @click="showRestoreModal = false"
+              type="button" 
+              class="btn btn-light"
+            >
+              Cancel
+            </button>
+            <button 
+              @click="executeRestore"
+              type="button" 
+              class="btn btn-info"
+              :disabled="isSubmitting"
+            >
+              <i v-if="isSubmitting" class="fas fa-spinner fa-spin me-2"></i>
+              <i v-else class="fas fa-undo me-2"></i>
+              {{ isSubmitting ? 'Restoring...' : 'Restore User' }}
             </button>
           </div>
         </div>
@@ -831,11 +1194,19 @@ export default {
       showResetModal: false,
       showBanUserModal: false,
       showUnbanUserModal: false,
+      showBannedModal: false,
+      showBanStatusModal: false,
+      showRestoreModal: false,
       userToDelete: null,
       userToReset: null,
       userToBan: null,
       userToUnban: null,
+      userToRestore: null,
+      banStatusInfo: null,
       isDeleting: false,
+      isPermanentDelete: false,
+      isFetchingBanned: false,
+      isCheckingBanStatus: false,
       selectAll: false,
       activeDropdown: null,
       // Filters
@@ -874,6 +1245,7 @@ export default {
   computed: {
     ...mapGetters('users', [
       'users',
+      'bannedUsers',
       'pagination',
       'filters',
       'isLoading',
@@ -930,10 +1302,11 @@ export default {
 
       // Filter by status
       if (this.selectedStatus) {
-        filtered = filtered.filter(user => 
-          (this.selectedStatus === 'active' && user.isActive) ||
-          (this.selectedStatus === 'inactive' && !user.isActive)
-        )
+        filtered = filtered.filter(user => {
+          const isUserActive = user.isActive && !user.deleted_at
+          return (this.selectedStatus === 'active' && isUserActive) ||
+                 (this.selectedStatus === 'inactive' && !isUserActive)
+        })
       }
 
       // Filter by verified status
@@ -949,7 +1322,15 @@ export default {
 
     // Statistics
     getActiveUsersCount() {
-      return this.filteredUsersList.filter(user => user.isActive).length
+      return this.filteredUsersList.filter(user => user.isActive && !user.deleted_at).length
+    },
+
+    getInactiveUsersCount() {
+      return this.filteredUsersList.filter(user => !user.isActive || user.deleted_at).length
+    },
+
+    getDeletedUsersCount() {
+      return this.filteredUsersList.filter(user => user.deleted_at).length
     },
 
     getVerifiedUsersCount() {
@@ -970,12 +1351,14 @@ export default {
   methods: {
     ...mapActions('users', [
       'fetchUsers',
+      'fetchBannedUsers',
       'createUser',
       'updateUser',
       'deleteUser',
       'resetPassword',
       'banUser',
       'unbanUser',
+      'checkBanStatus',
       'bulkDeleteUsers',
       'bulkUpdateStatus',
       'setFilters',
@@ -1022,7 +1405,41 @@ export default {
     deleteUserAction(user) {
       this.activeDropdown = null
       this.userToDelete = user
+      this.isPermanentDelete = false
       this.showDeleteModal = true
+    },
+
+    restoreUserAction(user) {
+      this.activeDropdown = null
+      // For restore, we can try to update the user to set deleted_at to null
+      // This would need a specific API endpoint or update functionality
+      this.userToRestore = user
+      this.showRestoreModal = true
+    },
+
+    permanentDeleteAction(user) {
+      this.activeDropdown = null
+      this.userToDelete = user
+      this.isPermanentDelete = true
+      this.showDeleteModal = true
+    },
+
+    async checkBanStatusAction(user) {
+      this.activeDropdown = null
+      this.banStatusInfo = null
+      this.showBanStatusModal = true
+      this.isCheckingBanStatus = true
+
+      try {
+        const response = await this.checkBanStatus(user.id)
+        this.banStatusInfo = response
+      } catch (error) {
+        console.error('Failed to check ban status:', error)
+        this.toast.error(error.message || 'Failed to check ban status')
+        this.showBanStatusModal = false
+      } finally {
+        this.isCheckingBanStatus = false
+      }
     },
 
     // Modal control methods
@@ -1043,6 +1460,50 @@ export default {
       this.showEditUserModal = true
     },
 
+    async showBannedUsersModal() {
+      this.showBannedModal = true
+      await this.refreshBannedUsers()
+    },
+
+    async refreshBannedUsers() {
+      this.isFetchingBanned = true
+      try {
+        await this.fetchBannedUsers()
+      } catch (error) {
+        console.error('Failed to fetch banned users:', error)
+        this.toast.error('Failed to fetch banned users')
+      } finally {
+        this.isFetchingBanned = false
+      }
+    },
+
+    unbanUserFromList(user) {
+      this.userToUnban = user
+      this.unbanReason = 'Unbanned from banned users list'
+      this.notifyUserUnban = true
+      this.showBannedModal = false
+      this.showUnbanUserModal = true
+    },
+
+    async checkBanStatusFromList(user) {
+      this.banStatusInfo = null
+      this.showBannedModal = false
+      this.showBanStatusModal = true
+      this.isCheckingBanStatus = true
+
+      try {
+        const response = await this.checkBanStatus(user.id)
+        this.banStatusInfo = response
+      } catch (error) {
+        console.error('Failed to check ban status:', error)
+        this.toast.error(error.message || 'Failed to check ban status')
+        this.showBanStatusModal = false
+        this.showBannedModal = true
+      } finally {
+        this.isCheckingBanStatus = false
+      }
+    },
+
     // Global event handlers
     handleGlobalClick(event) {
       if (!event.target.closest('.dropdown')) {
@@ -1055,9 +1516,10 @@ export default {
       this.isRefreshing = true
       try {
         await this.fetchUsers()
+        await this.fetchBannedUsers()
       } catch (error) {
-        console.error('Failed to load users:', error)
-        this.toast.error('Failed to load users')
+        console.error('Failed to load data:', error)
+        this.toast.error('Failed to load user data')
       } finally {
         this.isRefreshing = false
       }
@@ -1065,7 +1527,7 @@ export default {
 
     async handleRefresh() {
       await this.initializeData()
-      this.toast.success('Users refreshed successfully!')
+      this.toast.success('Data refreshed successfully!')
     },
 
     handleSidebarLogout() {
@@ -1133,6 +1595,45 @@ export default {
         default:
           return 'fas fa-question'
       }
+    },
+
+    getUserStatusBadgeClass(user) {
+      if (user.deleted_at) {
+        return 'bg-danger'
+      }
+      if (!user.isActive) {
+        return 'bg-warning'
+      }
+      if (user.lockedUntil) {
+        return 'bg-secondary'
+      }
+      return 'bg-success'
+    },
+
+    getUserStatusIcon(user) {
+      if (user.deleted_at) {
+        return 'fas fa-trash'
+      }
+      if (!user.isActive) {
+        return 'fas fa-ban'
+      }
+      if (user.lockedUntil) {
+        return 'fas fa-lock'
+      }
+      return 'fas fa-check-circle'
+    },
+
+    getUserStatusText(user) {
+      if (user.deleted_at) {
+        return 'Deleted'
+      }
+      if (!user.isActive) {
+        return 'Banned/Inactive'
+      }
+      if (user.lockedUntil) {
+        return 'Locked'
+      }
+      return 'Active'
     },
 
     // Search and filter methods
@@ -1216,6 +1717,8 @@ export default {
           this.showBanUserModal = false
           this.userToBan = null
           this.banReason = ''
+          // Refresh banned users list
+          await this.fetchBannedUsers()
         }
       } catch (error) {
         console.error('Ban user error:', error)
@@ -1237,6 +1740,9 @@ export default {
           this.showUnbanUserModal = false
           this.userToUnban = null
           this.unbanReason = ''
+          // Refresh both users and banned users list
+          await this.fetchUsers()
+          await this.fetchBannedUsers()
         }
       } catch (error) {
         console.error('Unban user error:', error)
@@ -1251,16 +1757,45 @@ export default {
       try {
         const response = await this.deleteUser(this.userToDelete.id)
         if (response.success) {
-          this.toast.success('User deleted successfully!')
+          const message = this.isPermanentDelete 
+            ? 'User permanently deleted successfully!' 
+            : 'User deleted successfully!'
+          this.toast.success(message)
           this.selectedUsers = this.selectedUsers.filter(id => id !== this.userToDelete.id)
           this.showDeleteModal = false
           this.userToDelete = null
+          this.isPermanentDelete = false
         }
       } catch (error) {
         console.error('Delete error:', error)
         this.toast.error(error.message || 'Failed to delete user')
       } finally {
         this.isDeleting = false
+      }
+    },
+
+    async executeRestore() {
+      if (!this.userToRestore) return
+      
+      try {
+        // Restore user by updating with deleted_at = null and isActive = true
+        const response = await this.updateUser({
+          id: this.userToRestore.id,
+          userData: {
+            isActive: true,
+            deleted_at: null
+          }
+        })
+        if (response.success) {
+          this.toast.success('User restored successfully!')
+          this.showRestoreModal = false
+          this.userToRestore = null
+          // Refresh the users list
+          await this.fetchUsers()
+        }
+      } catch (error) {
+        console.error('Restore user error:', error)
+        this.toast.error(error.message || 'Failed to restore user')
       }
     },
 
@@ -1714,6 +2249,17 @@ export default {
 
 .btn-close:hover {
   opacity: 0.75;
+}
+
+/* Ban Status Details */
+.ban-status-details .info-item {
+  margin-bottom: 1rem;
+}
+
+.ban-status-details .info-item label {
+  color: #6c757d;
+  font-size: 0.875rem;
+  margin-bottom: 0.25rem;
 }
 
 /* Responsive Design */

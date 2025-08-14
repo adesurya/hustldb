@@ -1,4 +1,4 @@
-// /src/router/index.js - Updated with Campaign route
+// /src/router/index.js - Updated with Category route
 import { createRouter, createWebHistory } from 'vue-router'
 import store from '../store'
 
@@ -29,6 +29,12 @@ const routes = [
     path: '/campaigns',
     name: 'Campaigns',
     component: () => import('../views/CampaignView.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/category', // Add category route
+    name: 'Category',
+    component: () => import('../views/CategoryView.vue'),
     meta: { requiresAuth: true }
   },
   {

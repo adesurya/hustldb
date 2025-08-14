@@ -1,4 +1,4 @@
-<!-- /src/components/modals/UserModal.vue - User add/edit modal -->
+<!-- /src/components/modals/UserModal.vue - Fixed User add/edit modal -->
 <template>
   <div 
     v-if="show"
@@ -217,6 +217,22 @@
                           </span>
                         </div>
                       </div>
+                      <div class="col-md-4">
+                        <small class="text-muted">Email Verified At:</small>
+                        <div class="fw-semibold">{{ formatDate(user.emailVerifiedAt) || 'Not verified' }}</div>
+                      </div>
+                      <div class="col-md-4">
+                        <small class="text-muted">Password Changed:</small>
+                        <div class="fw-semibold">{{ formatDate(user.passwordChangedAt) || 'Never' }}</div>
+                      </div>
+                      <div class="col-md-4">
+                        <small class="text-muted">Account Locked:</small>
+                        <div class="fw-semibold">
+                          <span class="badge" :class="user.lockedUntil ? 'bg-danger' : 'bg-success'">
+                            {{ user.lockedUntil ? 'Yes' : 'No' }}
+                          </span>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -403,15 +419,33 @@ export default {
       this.isSubmitting = true
 
       try {
-        // Prepare form data
+        // Prepare form data according to API structure
         const formData = {
-          ...this.form,
-          currentPoints: parseInt(this.form.currentPoints) || 0
+          username: this.form.username.trim(),
+          email: this.form.email.trim(),
+          role: this.form.role,
+          isVerified: this.form.isVerified,
+          isActive: this.form.isActive,
+          canEarnPoints: this.form.canEarnPoints
         }
 
-        // Remove empty optional fields
-        if (!formData.phoneNumber) delete formData.phoneNumber
-        if (this.isEdit && !formData.password) delete formData.password
+        // Add optional fields only if they have values
+        if (this.form.phoneNumber && this.form.phoneNumber.trim()) {
+          formData.phoneNumber = this.form.phoneNumber.trim()
+        }
+
+        if (this.isEdit) {
+          // For edit mode, add currentPoints
+          formData.currentPoints = parseInt(this.form.currentPoints) || 0
+          
+          // Only include password if it was changed
+          if (this.form.password && this.form.password.trim()) {
+            formData.password = this.form.password
+          }
+        } else {
+          // For create mode, password is required
+          formData.password = this.form.password
+        }
 
         this.$emit('save', formData)
       } catch (error) {
@@ -584,6 +618,10 @@ export default {
 
 .badge.bg-secondary {
   background-color: #6c757d !important;
+}
+
+.badge.bg-danger {
+  background-color: #dc3545 !important;
 }
 
 .text-danger {

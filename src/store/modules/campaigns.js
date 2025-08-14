@@ -1,8 +1,9 @@
-// /src/store/modules/campaigns.js - Simplified campaign store module
+// /src/store/modules/campaigns.js - Fixed campaign store module
 import campaignService from '@/services/campaignService'
 
 const state = {
   campaigns: [],
+  activeCampaigns: [],
   currentCampaign: null,
   campaignProducts: [],
   pagination: {
@@ -35,6 +36,11 @@ const mutations = {
   SET_CAMPAIGNS(state, campaigns) {
     console.log('🔄 Store - Setting campaigns:', campaigns)
     state.campaigns = Array.isArray(campaigns) ? campaigns : []
+  },
+
+  SET_ACTIVE_CAMPAIGNS(state, campaigns) {
+    console.log('🔄 Store - Setting active campaigns:', campaigns)
+    state.activeCampaigns = Array.isArray(campaigns) ? campaigns : []
   },
 
   SET_CURRENT_CAMPAIGN(state, campaign) {
@@ -72,21 +78,51 @@ const mutations = {
     if (index !== -1) {
       state.campaigns.splice(index, 1, updatedCampaign)
     }
+    
+    // Also update in active campaigns if exists
+    const activeIndex = state.activeCampaigns.findIndex(c => c.id === updatedCampaign.id)
+    if (activeIndex !== -1) {
+      if (updatedCampaign.isActive) {
+        state.activeCampaigns.splice(activeIndex, 1, updatedCampaign)
+      } else {
+        state.activeCampaigns.splice(activeIndex, 1)
+      }
+    } else if (updatedCampaign.isActive) {
+      state.activeCampaigns.push(updatedCampaign)
+    }
   },
 
   REMOVE_CAMPAIGN(state, campaignId) {
     state.campaigns = state.campaigns.filter(c => c.id !== campaignId)
+    state.activeCampaigns = state.activeCampaigns.filter(c => c.id !== campaignId)
   },
 
   REMOVE_CAMPAIGNS(state, campaignIds) {
     state.campaigns = state.campaigns.filter(c => !campaignIds.includes(c.id))
+    state.activeCampaigns = state.activeCampaigns.filter(c => !campaignIds.includes(c.id))
   },
 
   UPDATE_CAMPAIGN_STATUS(state, { campaignId, isActive }) {
+    // Update in campaigns array
     const campaign = state.campaigns.find(c => c.id === campaignId)
     if (campaign) {
       campaign.isActive = isActive
       campaign.status = isActive ? 'active' : 'inactive'
+    }
+
+    // Update in active campaigns array
+    const activeCampaign = state.activeCampaigns.find(c => c.id === campaignId)
+    if (activeCampaign) {
+      if (isActive) {
+        activeCampaign.isActive = isActive
+        activeCampaign.status = 'active'
+      } else {
+        // Remove from active campaigns
+        state.activeCampaigns = state.activeCampaigns.filter(c => c.id !== campaignId)
+      }
+    } else if (isActive && campaign) {
+      // Add to active campaigns
+      state.activeCampaigns.push({ ...campaign, isActive: true, status: 'active' })
     }
   },
 
@@ -152,6 +188,37 @@ const actions = {
     }
   },
 
+  async fetchActiveCampaigns({ commit }) {
+    console.log('🚀 Store - Fetching active campaigns...')
+    
+    commit('SET_LOADING', true)
+    commit('CLEAR_ERROR')
+    
+    try {
+      const response = await campaignService.getActiveCampaigns()
+      
+      console.log('📦 Store - Active campaigns response:', response)
+      
+      if (response.success) {
+        const activeCampaigns = response.data || []
+        console.log('✅ Store - Active campaigns data:', activeCampaigns)
+        
+        commit('SET_ACTIVE_CAMPAIGNS', activeCampaigns)
+        
+        console.log('✅ Store - Active campaigns successfully loaded:', activeCampaigns.length, 'items')
+      } else {
+        throw new Error(response.message || 'Failed to fetch active campaigns')
+      }
+    } catch (error) {
+      console.error('❌ Store - Failed to fetch active campaigns:', error)
+      commit('SET_ERROR', error)
+      commit('SET_ACTIVE_CAMPAIGNS', [])
+      throw error
+    } finally {
+      commit('SET_LOADING', false)
+    }
+  },
+
   async fetchCampaign({ commit }, campaignId) {
     console.log('🚀 Store - Fetching campaign:', campaignId)
     
@@ -176,6 +243,36 @@ const actions = {
     }
   },
 
+  async fetchCampaignDetail({ commit }, campaignId) {
+    console.log('🚀 Store - Fetching campaign detail:', campaignId)
+    
+    commit('SET_LOADING', true)
+    commit('CLEAR_ERROR')
+    
+    try {
+      const response = await campaignService.getCampaignDetail(campaignId)
+      
+      if (response.success) {
+        commit('SET_CURRENT_CAMPAIGN', response.data)
+        
+        // Set campaign products if available
+        if (response.data.products) {
+          commit('SET_CAMPAIGN_PRODUCTS', response.data.products)
+        }
+        
+        return response.data
+      } else {
+        throw new Error(response.message || 'Failed to fetch campaign detail')
+      }
+    } catch (error) {
+      console.error('❌ Store - Failed to fetch campaign detail:', error)
+      commit('SET_ERROR', error)
+      throw error
+    } finally {
+      commit('SET_LOADING', false)
+    }
+  },
+
   async createCampaign({ commit, dispatch }, campaignData) {
     console.log('🚀 Store - Creating campaign:', campaignData)
     
@@ -186,9 +283,27 @@ const actions = {
       const response = await campaignService.createCampaign(campaignData)
       
       if (response.success) {
+        // Handle product addition results if available
+        if (response.data.productAdditionResults) {
+          const results = response.data.productAdditionResults
+          console.log('📊 Product addition results:', results)
+          
+          // You can show additional info about failed products
+          if (results.failed && results.failed.length > 0) {
+            console.warn('⚠️ Some products could not be added:', results.failed)
+          }
+        }
+        
         commit('ADD_CAMPAIGN', response.data)
+        
         // Refresh the campaign list to get updated data
         await dispatch('fetchCampaigns')
+        
+        // If campaign is active, also refresh active campaigns
+        if (response.data.isActive) {
+          await dispatch('fetchActiveCampaigns')
+        }
+        
         return response
       } else {
         throw new Error(response.message || 'Failed to create campaign')
@@ -213,8 +328,13 @@ const actions = {
       
       if (response.success) {
         commit('UPDATE_CAMPAIGN', response.data)
+        
         // Refresh the campaign list to get updated data
         await dispatch('fetchCampaigns')
+        
+        // Refresh active campaigns as status might have changed
+        await dispatch('fetchActiveCampaigns')
+        
         return response
       } else {
         throw new Error(response.message || 'Failed to update campaign')
@@ -228,7 +348,7 @@ const actions = {
     }
   },
 
-  async deleteCampaign({ commit }, campaignId) {
+  async deleteCampaign({ commit, dispatch }, campaignId) {
     console.log('🚀 Store - Deleting campaign:', campaignId)
     
     commit('CLEAR_ERROR')
@@ -238,6 +358,12 @@ const actions = {
       
       if (response.success) {
         commit('REMOVE_CAMPAIGN', campaignId)
+        
+        // Show info about released products if available
+        if (response.data.releasedProducts) {
+          console.log(`📦 Released ${response.data.releasedProducts} products for reuse`)
+        }
+        
         return response
       } else {
         throw new Error(response.message || 'Failed to delete campaign')
@@ -249,7 +375,7 @@ const actions = {
     }
   },
 
-  async bulkDeleteCampaigns({ commit }, campaignIds) {
+  async bulkDeleteCampaigns({ commit, dispatch }, campaignIds) {
     console.log('🚀 Store - Bulk deleting campaigns:', campaignIds)
     
     commit('SET_SUBMITTING', true)
@@ -260,6 +386,11 @@ const actions = {
       
       if (response.success) {
         commit('REMOVE_CAMPAIGNS', campaignIds)
+        
+        // Refresh campaigns to ensure consistency
+        await dispatch('fetchCampaigns')
+        await dispatch('fetchActiveCampaigns')
+        
         return response
       } else {
         throw new Error(response.message || 'Failed to bulk delete campaigns')
@@ -273,7 +404,7 @@ const actions = {
     }
   },
 
-  async toggleCampaignStatus({ commit }, campaignId) {
+  async toggleCampaignStatus({ commit, dispatch }, campaignId) {
     console.log('🚀 Store - Toggling campaign status:', campaignId)
     
     commit('CLEAR_ERROR')
@@ -287,6 +418,10 @@ const actions = {
           campaignId, 
           isActive: updatedCampaign.isActive 
         })
+        
+        // Refresh active campaigns as status changed
+        await dispatch('fetchActiveCampaigns')
+        
         return response
       } else {
         throw new Error(response.message || 'Failed to toggle campaign status')
@@ -298,7 +433,7 @@ const actions = {
     }
   },
 
-  async bulkUpdateStatus({ commit }, { campaignIds, isActive }) {
+  async bulkUpdateStatus({ commit, dispatch }, { campaignIds, isActive }) {
     console.log('🚀 Store - Bulk updating status:', { campaignIds, isActive })
     
     commit('SET_SUBMITTING', true)
@@ -311,6 +446,11 @@ const actions = {
         campaignIds.forEach(campaignId => {
           commit('UPDATE_CAMPAIGN_STATUS', { campaignId, isActive })
         })
+        
+        // Refresh campaigns to ensure consistency
+        await dispatch('fetchCampaigns')
+        await dispatch('fetchActiveCampaigns')
+        
         return response
       } else {
         throw new Error(response.message || 'Failed to bulk update status')
@@ -357,6 +497,10 @@ const actions = {
       if (response.success) {
         // Refresh campaign products
         await dispatch('fetchCampaignProducts', campaignId)
+        
+        // Refresh campaigns to update product counts
+        await dispatch('fetchCampaigns')
+        
         return response
       } else {
         throw new Error(response.message || 'Failed to add products to campaign')
@@ -376,12 +520,34 @@ const actions = {
       if (response.success) {
         // Refresh campaign products
         await dispatch('fetchCampaignProducts', campaignId)
+        
+        // Refresh campaigns to update product counts
+        await dispatch('fetchCampaigns')
+        
         return response
       } else {
         throw new Error(response.message || 'Failed to remove products from campaign')
       }
     } catch (error) {
       console.error('❌ Store - Failed to remove products from campaign:', error)
+      throw error
+    }
+  },
+
+  async validateProductForCampaign({ commit }, { campaignId, productId }) {
+    console.log('🚀 Store - Validating product for campaign:', { campaignId, productId })
+    
+    try {
+      const response = await campaignService.validateProductForCampaign(campaignId, productId)
+      
+      if (response.success) {
+        return response.data
+      } else {
+        throw new Error(response.message || 'Failed to validate product')
+      }
+    } catch (error) {
+      console.error('❌ Store - Failed to validate product:', error)
+      commit('SET_ERROR', error)
       throw error
     }
   },
@@ -410,6 +576,7 @@ const actions = {
 
 const getters = {
   campaigns: (state) => state.campaigns,
+  activeCampaigns: (state) => state.activeCampaigns,
   currentCampaign: (state) => state.currentCampaign,
   campaignProducts: (state) => state.campaignProducts,
   pagination: (state) => state.pagination,
@@ -434,7 +601,6 @@ const getters = {
     })
   },
 
-  activeCampaigns: (state) => state.campaigns.filter(c => c.isActive),
   inactiveCampaigns: (state) => state.campaigns.filter(c => !c.isActive),
   upcomingCampaigns: (state) => state.campaigns.filter(c => c.status === 'upcoming'),
   expiredCampaigns: (state) => state.campaigns.filter(c => c.status === 'expired'),
@@ -447,6 +613,24 @@ const getters = {
       upcoming: state.campaigns.filter(c => c.status === 'upcoming').length,
       expired: state.campaigns.filter(c => c.status === 'expired').length
     }
+  },
+
+  // Get campaign by ID
+  getCampaignById: (state) => (id) => {
+    return state.campaigns.find(campaign => campaign.id === id) || null
+  },
+
+  // Get active campaigns count
+  activeCampaignsCount: (state) => state.activeCampaigns.length,
+
+  // Get campaigns with products
+  campaignsWithProducts: (state) => {
+    return state.campaigns.filter(campaign => campaign.productCount > 0)
+  },
+
+  // Get campaigns without products
+  campaignsWithoutProducts: (state) => {
+    return state.campaigns.filter(campaign => campaign.productCount === 0)
   }
 }
 

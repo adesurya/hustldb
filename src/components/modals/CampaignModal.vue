@@ -1,4 +1,4 @@
-<!-- /src/components/modals/CampaignModal.vue - Improved with Image Upload & Better Toggle -->
+<!-- /src/components/modals/CampaignModal.vue - Fixed with proper date validation -->
 <template>
   <div 
     v-if="show"
@@ -10,6 +10,7 @@
       <div class="modal-content border-0">
         <div class="modal-header border-0 pb-0">
           <h5 class="modal-title fw-bold">
+            <i :class="isEdit ? 'fas fa-edit' : 'fas fa-plus'" class="text-primary me-2"></i>
             {{ isEdit ? 'Edit Campaign' : 'Add New Campaign' }}
           </h5>
           <button 
@@ -53,9 +54,10 @@
                   :class="{ 'is-invalid': errors.slug }"
                   placeholder="campaign-slug"
                   required
+                  :disabled="isEdit"
                 >
                 <div class="form-text">
-                  URL-friendly version of the campaign name
+                  {{ isEdit ? 'Slug cannot be changed after creation' : 'URL-friendly version of the campaign name' }}
                 </div>
                 <div v-if="errors.slug" class="invalid-feedback">
                   {{ errors.slug }}
@@ -175,7 +177,7 @@
                 </div>
               </div>
 
-              <!-- Start Date and End Date -->
+              <!-- Start Date and End Date with validation -->
               <div class="col-md-6">
                 <label class="form-label fw-semibold">
                   Start Date <span class="text-danger">*</span>
@@ -185,8 +187,14 @@
                   type="datetime-local"
                   class="form-control"
                   :class="{ 'is-invalid': errors.startDate }"
+                  :min="minDateTime"
                   required
+                  @change="validateDates"
                 >
+                <div class="form-text">
+                  <i class="fas fa-info-circle me-1"></i>
+                  Start date must be in the future
+                </div>
                 <div v-if="errors.startDate" class="invalid-feedback">
                   {{ errors.startDate }}
                 </div>
@@ -201,14 +209,20 @@
                   type="datetime-local"
                   class="form-control"
                   :class="{ 'is-invalid': errors.endDate }"
+                  :min="form.startDate || minDateTime"
                   required
+                  @change="validateDates"
                 >
+                <div class="form-text">
+                  <i class="fas fa-info-circle me-1"></i>
+                  End date must be after start date
+                </div>
                 <div v-if="errors.endDate" class="invalid-feedback">
                   {{ errors.endDate }}
                 </div>
               </div>
 
-              <!-- Campaign Status Toggle - Improved -->
+              <!-- Campaign Status Toggle -->
               <div class="col-12">
                 <div class="campaign-status-section">
                   <label class="form-label fw-semibold">Campaign Status</label>
@@ -244,59 +258,37 @@
                     <!-- Helper Text -->
                     <div class="form-text">
                       {{ form.isActive 
-                        ? 'This campaign will be activated immediately after creation' 
-                        : 'This campaign will be created as inactive and can be activated later' 
+                        ? (isEdit ? 'This campaign will remain active' : 'This campaign will be activated immediately after creation')
+                        : (isEdit ? 'This campaign will be deactivated' : 'This campaign will be created as inactive and can be activated later')
                       }}
                     </div>
                   </div>
                 </div>
               </div>
 
-              <!-- Product Selection - Simplified -->
+              <!-- Product Selection Section -->
               <div class="col-12">
                 <label class="form-label fw-semibold">
-                  Select Products (Optional)
+                  Campaign Products
                 </label>
-                <div class="products-selection">
-                  <div class="search-products mb-2">
-                    <input
-                      v-model="productSearch"
-                      type="text"
-                      class="form-control form-control-sm"
-                      placeholder="Search products..."
-                    >
-                  </div>
-                  
-                  <div class="products-list" style="max-height: 200px; overflow-y: auto;">
-                    <div v-if="isLoadingProducts" class="text-center py-2">
-                      <div class="spinner-border spinner-border-sm" role="status">
-                        <span class="visually-hidden">Loading...</span>
-                      </div>
+                
+                <div class="products-management">
+                  <!-- Current Campaign Products (for edit mode) -->
+                  <div v-if="isEdit && currentCampaignProducts.length > 0" class="current-products mb-3">
+                    <div class="section-header">
+                      <h6 class="fw-semibold mb-2">
+                        <i class="fas fa-box text-success me-2"></i>
+                        Current Products ({{ currentCampaignProducts.length }})
+                      </h6>
                     </div>
                     
-                    <div v-else-if="filteredProducts.length === 0" class="text-muted text-center py-2">
-                      No products found
-                    </div>
-                    
-                    <div v-else>
+                    <div class="current-products-list">
                       <div 
-                        v-for="product in filteredProducts" 
-                        :key="product.id"
-                        class="product-item"
-                        :class="{ 'selected': form.productIds.includes(product.id) }"
-                        @click="toggleProductSelection(product.id)"
+                        v-for="product in currentCampaignProducts" 
+                        :key="`current-${product.id}`"
+                        class="product-item current-product"
                       >
                         <div class="d-flex align-items-center">
-                          <div class="form-check me-3">
-                            <input
-                              v-model="form.productIds"
-                              :value="product.id"
-                              type="checkbox"
-                              class="form-check-input"
-                              @click.stop
-                            >
-                          </div>
-                          
                           <div class="product-image me-3">
                             <img 
                               :src="getProductImageUrl(product)"
@@ -318,47 +310,148 @@
                             </div>
                           </div>
                           
-                          <!-- Selection Indicator -->
-                          <div v-if="form.productIds.includes(product.id)" class="selection-indicator">
-                            <div class="selected-badge">
-                              <i class="fas fa-check text-white"></i>
+                          <button 
+                            type="button"
+                            @click="removeCurrentProduct(product.id)"
+                            class="btn btn-sm btn-outline-danger"
+                          >
+                            <i class="fas fa-times"></i>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Add Products Section -->
+                  <div class="add-products-section">
+                    <div class="section-header">
+                      <h6 class="fw-semibold mb-2">
+                        <i class="fas fa-plus-circle text-primary me-2"></i>
+                        {{ isEdit ? 'Add More Products' : 'Select Products' }}
+                      </h6>
+                    </div>
+                    
+                    <div class="search-products mb-2">
+                      <input
+                        v-model="productSearch"
+                        type="text"
+                        class="form-control form-control-sm"
+                        placeholder="Search products..."
+                      >
+                    </div>
+                    
+                    <div class="products-list" style="max-height: 200px; overflow-y: auto;">
+                      <div v-if="isLoadingProducts" class="text-center py-2">
+                        <div class="spinner-border spinner-border-sm" role="status">
+                          <span class="visually-hidden">Loading...</span>
+                        </div>
+                      </div>
+                      
+                      <div v-else-if="filteredAvailableProducts.length === 0" class="text-muted text-center py-2">
+                        No products found
+                      </div>
+                      
+                      <div v-else>
+                        <div 
+                          v-for="product in filteredAvailableProducts" 
+                          :key="product.id"
+                          class="product-item"
+                          :class="{ 
+                            'selected': form.productIds.includes(product.id),
+                            'validating': validatingProducts.includes(product.id),
+                            'invalid': invalidProducts.includes(product.id)
+                          }"
+                          @click="toggleProductSelection(product.id)"
+                        >
+                          <div class="d-flex align-items-center">
+                            <div class="form-check me-3">
+                              <input
+                                v-model="form.productIds"
+                                :value="product.id"
+                                type="checkbox"
+                                class="form-check-input"
+                                :disabled="validatingProducts.includes(product.id) || invalidProducts.includes(product.id)"
+                                @click.stop
+                              >
+                            </div>
+                            
+                            <div class="product-image me-3">
+                              <img 
+                                :src="getProductImageUrl(product)"
+                                :alt="product.title"
+                                @error="handleImageError($event)"
+                              >
+                              <!-- Validation indicator -->
+                              <div v-if="validatingProducts.includes(product.id)" class="validation-spinner">
+                                <div class="spinner-border spinner-border-sm" role="status"></div>
+                              </div>
+                              <div v-else-if="invalidProducts.includes(product.id)" class="validation-error">
+                                <i class="fas fa-exclamation-triangle text-warning"></i>
+                              </div>
+                            </div>
+                            
+                            <div class="flex-grow-1">
+                              <h6 class="mb-1 product-title">{{ product.title }}</h6>
+                              <small class="text-muted">{{ product.category?.name || 'No Category' }}</small>
+                              <div class="mt-1">
+                                <span class="badge bg-light text-dark me-1">
+                                  {{ formatPrice(product.price) }}
+                                </span>
+                                <span class="badge bg-light text-dark">
+                                  {{ product.points || 0 }} pts
+                                </span>
+                              </div>
+                              <!-- Validation message -->
+                              <div v-if="productValidationMessages[product.id]" class="validation-message mt-1">
+                                <small class="text-warning">
+                                  <i class="fas fa-exclamation-triangle me-1"></i>
+                                  {{ productValidationMessages[product.id] }}
+                                </small>
+                              </div>
+                            </div>
+                            
+                            <!-- Selection Indicator -->
+                            <div v-if="form.productIds.includes(product.id)" class="selection-indicator">
+                              <div class="selected-badge">
+                                <i class="fas fa-check text-white"></i>
+                              </div>
                             </div>
                           </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                  
-                  <div v-if="form.productIds.length > 0" class="selected-products mt-3">
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                      <small class="text-muted fw-semibold">
-                        Selected Products ({{ form.productIds.length }})
-                      </small>
-                      <button 
-                        type="button"
-                        @click="clearAllSelection"
-                        class="btn btn-sm btn-outline-danger"
-                      >
-                        Clear All
-                      </button>
-                    </div>
                     
-                    <div class="selected-items">
-                      <div 
-                        v-for="productId in form.productIds" 
-                        :key="`selected-${productId}`"
-                        class="selected-item"
-                      >
-                        <span class="selected-item-name">
-                          {{ getProductNameById(productId) }}
-                        </span>
+                    <div v-if="form.productIds.length > 0" class="selected-products mt-3">
+                      <div class="d-flex justify-content-between align-items-center mb-2">
+                        <small class="text-muted fw-semibold">
+                          {{ isEdit ? 'Products to Add' : 'Selected Products' }} ({{ form.productIds.length }})
+                        </small>
                         <button 
                           type="button"
-                          @click="removeProductSelection(productId)"
-                          class="btn btn-sm btn-outline-secondary ms-2"
+                          @click="clearAllSelection"
+                          class="btn btn-sm btn-outline-danger"
                         >
-                          <i class="fas fa-times"></i>
+                          Clear All
                         </button>
+                      </div>
+                      
+                      <div class="selected-items">
+                        <div 
+                          v-for="productId in form.productIds" 
+                          :key="`selected-${productId}`"
+                          class="selected-item"
+                        >
+                          <span class="selected-item-name">
+                            {{ getProductNameById(productId) }}
+                          </span>
+                          <button 
+                            type="button"
+                            @click="removeProductSelection(productId)"
+                            class="btn btn-sm btn-outline-secondary ms-2"
+                          >
+                            <i class="fas fa-times"></i>
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -393,6 +486,8 @@
 </template>
 
 <script>
+import campaignService from '@/services/campaignService'
+
 export default {
   name: 'CampaignModal',
   
@@ -430,23 +525,44 @@ export default {
       isSubmitting: false,
       isUploadingImage: false,
       availableProducts: [],
+      currentCampaignProducts: [],
       isLoadingProducts: false,
+      isLoadingCampaignProducts: false,
       productSearch: '',
       imagePreview: '',
-      currentImagePreview: ''
+      currentImagePreview: '',
+      productsToRemove: [], // Track products to remove in edit mode
+      // Product validation
+      validatingProducts: [],
+      invalidProducts: [],
+      productValidationMessages: {}
     }
   },
 
   computed: {
-    filteredProducts() {
-      if (!this.productSearch.trim()) {
-        return this.availableProducts.slice(0, 20) // Limit to 20 items for performance
+    // Get minimum date time (current date + 1 hour)
+    minDateTime() {
+      const now = new Date()
+      now.setHours(now.getHours() + 1) // Add 1 hour buffer
+      return now.toISOString().slice(0, 16)
+    },
+
+    filteredAvailableProducts() {
+      let filtered = this.availableProducts.filter(product => {
+        // Exclude products that are already in the campaign (for edit mode)
+        const isAlreadyInCampaign = this.currentCampaignProducts.some(cp => cp.id === product.id)
+        return !isAlreadyInCampaign
+      })
+
+      if (this.productSearch.trim()) {
+        const query = this.productSearch.toLowerCase()
+        filtered = filtered.filter(product =>
+          product.title.toLowerCase().includes(query) ||
+          (product.category?.name || '').toLowerCase().includes(query)
+        )
       }
       
-      const query = this.productSearch.toLowerCase()
-      return this.availableProducts.filter(product =>
-        product.title.toLowerCase().includes(query)
-      ).slice(0, 20)
+      return filtered.slice(0, 20) // Limit to 20 items for performance
     }
   },
 
@@ -456,6 +572,9 @@ export default {
         if (newVal) {
           this.initializeForm()
           this.loadProducts()
+          if (this.isEdit && this.campaign) {
+            this.loadCurrentCampaignProducts()
+          }
           document.body.style.overflow = 'hidden'
         } else {
           document.body.style.overflow = 'auto'
@@ -469,6 +588,9 @@ export default {
       handler() {
         if (this.show) {
           this.initializeForm()
+          if (this.isEdit && this.campaign) {
+            this.loadCurrentCampaignProducts()
+          }
         }
       },
       immediate: true
@@ -507,7 +629,7 @@ export default {
           description: this.campaign.description || '',
           startDate: startDate,
           endDate: endDate,
-          productIds: this.campaign.productIds || [],
+          productIds: [], // Start with empty array for new products to add
           isActive: this.campaign.isActive !== undefined ? this.campaign.isActive : true,
           image: '',
           imageUrl: ''
@@ -518,7 +640,7 @@ export default {
           this.currentImagePreview = this.getCampaignImageUrl(this.campaign)
         }
       } else {
-        // Set default start and end dates
+        // Set default start and end dates (future dates)
         const now = new Date()
         const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000)
         const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
@@ -535,11 +657,16 @@ export default {
           imageUrl: ''
         }
         this.currentImagePreview = ''
+        this.currentCampaignProducts = []
       }
       
       this.errors = {}
       this.productSearch = ''
       this.imagePreview = ''
+      this.productsToRemove = []
+      this.validatingProducts = []
+      this.invalidProducts = []
+      this.productValidationMessages = {}
     },
 
     resetForm() {
@@ -558,14 +685,19 @@ export default {
       this.productSearch = ''
       this.imagePreview = ''
       this.currentImagePreview = ''
+      this.currentCampaignProducts = []
       this.isUploadingImage = false
+      this.productsToRemove = []
+      this.validatingProducts = []
+      this.invalidProducts = []
+      this.productValidationMessages = {}
     },
 
     async loadProducts() {
       this.isLoadingProducts = true
       try {
         // Simple fetch to get products
-        const response = await fetch(`${process.env.VUE_APP_API_URL || 'https://apihustl.sijago.ai'}/api/v1/products`, {
+        const response = await fetch(`${process.env.VUE_APP_API_URL || 'https://apihustl.sijago.ai'}/api/v1/products?limit=100`, {
           method: 'GET',
           headers: {
             'Accept': 'application/json',
@@ -587,6 +719,25 @@ export default {
       }
     },
 
+    async loadCurrentCampaignProducts() {
+      if (!this.campaign?.id) return
+      
+      this.isLoadingCampaignProducts = true
+      try {
+        console.log('🔍 Loading current campaign products for campaign:', this.campaign.id)
+        const response = await campaignService.getCampaignProducts(this.campaign.id, { page: 1, limit: 100 })
+        if (response.success) {
+          this.currentCampaignProducts = response.data || []
+          console.log('📦 Current campaign products loaded:', this.currentCampaignProducts.length, 'products')
+        }
+      } catch (error) {
+        console.error('Failed to load current campaign products:', error)
+        this.currentCampaignProducts = []
+      } finally {
+        this.isLoadingCampaignProducts = false
+      }
+    },
+
     generateSlug() {
       if (!this.isEdit) {
         // Auto-generate slug from name
@@ -596,6 +747,28 @@ export default {
           .replace(/\s+/g, '-') // Replace spaces with hyphens
           .replace(/-+/g, '-') // Replace multiple hyphens with single
           .trim('-') // Remove leading/trailing hyphens
+      }
+    },
+
+    // Date validation
+    validateDates() {
+      this.errors.startDate = ''
+      this.errors.endDate = ''
+
+      if (this.form.startDate && this.form.endDate) {
+        const startDate = new Date(this.form.startDate)
+        const endDate = new Date(this.form.endDate)
+        const now = new Date()
+
+        // Check if start date is in the future
+        if (startDate <= now) {
+          this.errors.startDate = 'Start date must be in the future'
+        }
+
+        // Check if end date is after start date
+        if (endDate <= startDate) {
+          this.errors.endDate = 'End date must be after start date'
+        }
       }
     },
 
@@ -692,6 +865,93 @@ export default {
       this.imagePreview = ''
     },
 
+    // Product management methods
+    removeCurrentProduct(productId) {
+      const productIndex = this.currentCampaignProducts.findIndex(p => p.id === productId)
+      if (productIndex > -1) {
+        const product = this.currentCampaignProducts[productIndex]
+        
+        // Add to removal list
+        this.productsToRemove.push(productId)
+        
+        // Remove from current products display
+        this.currentCampaignProducts.splice(productIndex, 1)
+        
+        console.log('🗑️ Product marked for removal:', product.title)
+        console.log('📝 Products to remove:', this.productsToRemove)
+      }
+    },
+
+    async toggleProductSelection(productId) {
+      const index = this.form.productIds.indexOf(productId)
+      
+      if (index > -1) {
+        // Remove from selection
+        this.form.productIds.splice(index, 1)
+        this.invalidProducts = this.invalidProducts.filter(id => id !== productId)
+        delete this.productValidationMessages[productId]
+      } else {
+        // Add to selection - validate first if not creating new campaign
+        if (!this.isEdit) {
+          // For new campaigns, we can't validate until campaign is created
+          this.form.productIds.push(productId)
+        } else {
+          // For existing campaigns, validate before adding
+          await this.validateAndAddProduct(productId)
+        }
+      }
+    },
+
+    async validateAndAddProduct(productId) {
+      if (!this.campaign?.id) {
+        // If no campaign ID, just add to selection
+        this.form.productIds.push(productId)
+        return
+      }
+
+      // Start validation
+      this.validatingProducts.push(productId)
+      
+      try {
+        const response = await campaignService.validateProductForCampaign(this.campaign.id, productId)
+        
+        if (response.success && response.data.canAdd) {
+          // Product can be added
+          this.form.productIds.push(productId)
+          this.invalidProducts = this.invalidProducts.filter(id => id !== productId)
+          delete this.productValidationMessages[productId]
+        } else {
+          // Product cannot be added
+          this.invalidProducts.push(productId)
+          this.productValidationMessages[productId] = response.data.reason || 'Product cannot be added'
+        }
+      } catch (error) {
+        console.error('Product validation failed:', error)
+        this.invalidProducts.push(productId)
+        this.productValidationMessages[productId] = 'Validation failed'
+      } finally {
+        this.validatingProducts = this.validatingProducts.filter(id => id !== productId)
+      }
+    },
+
+    removeProductSelection(productId) {
+      const index = this.form.productIds.indexOf(productId)
+      if (index > -1) {
+        this.form.productIds.splice(index, 1)
+      }
+    },
+
+    clearAllSelection() {
+      this.form.productIds = []
+      this.invalidProducts = []
+      this.productValidationMessages = {}
+    },
+
+    getProductNameById(productId) {
+      const product = this.availableProducts.find(p => p.id === productId)
+      return product ? product.title : `Product #${productId}`
+    },
+
     validateForm() {
       this.errors = {}
 
@@ -717,11 +977,17 @@ export default {
         this.errors.endDate = 'End date is required'
       }
 
+      // Validate dates
       if (this.form.startDate && this.form.endDate) {
-        const start = new Date(this.form.startDate)
-        const end = new Date(this.form.endDate)
+        const startDate = new Date(this.form.startDate)
+        const endDate = new Date(this.form.endDate)
+        const now = new Date()
         
-        if (start >= end) {
+        if (startDate <= now) {
+          this.errors.startDate = 'Start date must be in the future'
+        }
+        
+        if (endDate <= startDate) {
           this.errors.endDate = 'End date must be after start date'
         }
       }
@@ -744,8 +1010,12 @@ export default {
           description: this.form.description.trim(),
           startDate: new Date(this.form.startDate).toISOString(),
           endDate: new Date(this.form.endDate).toISOString(),
-          isActive: this.form.isActive,
-          productIds: this.form.productIds || []
+          isActive: this.form.isActive
+        }
+
+        // For create mode: include productIds
+        if (!this.isEdit) {
+          formData.productIds = this.form.productIds || []
         }
 
         // Add image data
@@ -757,6 +1027,11 @@ export default {
 
         console.log('📤 Submitting campaign data:', formData)
 
+        // If edit mode, handle product management separately
+        if (this.isEdit) {
+          await this.handleEditModeProductManagement()
+        }
+
         this.$emit('save', formData)
       } catch (error) {
         console.error('Form submission error:', error)
@@ -765,30 +1040,25 @@ export default {
       }
     },
 
-    // Product selection methods
-    toggleProductSelection(productId) {
-      const index = this.form.productIds.indexOf(productId)
-      if (index > -1) {
-        this.form.productIds.splice(index, 1)
-      } else {
-        this.form.productIds.push(productId)
+    async handleEditModeProductManagement() {
+      if (!this.campaign?.id) return
+
+      try {
+        // Remove products that were marked for removal
+        if (this.productsToRemove.length > 0) {
+          console.log('🗑️ Removing products:', this.productsToRemove)
+          await campaignService.removeProductsFromCampaign(this.campaign.id, this.productsToRemove)
+        }
+
+        // Add new products that were selected
+        if (this.form.productIds.length > 0) {
+          console.log('➕ Adding products:', this.form.productIds)
+          await campaignService.addProductsToCampaign(this.campaign.id, this.form.productIds)
+        }
+      } catch (error) {
+        console.error('Failed to manage products:', error)
+        throw error
       }
-    },
-
-    removeProductSelection(productId) {
-      const index = this.form.productIds.indexOf(productId)
-      if (index > -1) {
-        this.form.productIds.splice(index, 1)
-      }
-    },
-
-    clearAllSelection() {
-      this.form.productIds = []
-    },
-
-    getProductNameById(productId) {
-      const product = this.availableProducts.find(p => p.id === productId)
-      return product ? product.title : `Product #${productId}`
     },
 
     // Image URL helpers
@@ -884,6 +1154,11 @@ export default {
 .form-control.is-invalid,
 .form-select.is-invalid {
   border-color: #dc3545;
+}
+
+.form-control:disabled {
+  background-color: #e9ecef;
+  opacity: 1;
 }
 
 .invalid-feedback {
@@ -1000,12 +1275,36 @@ export default {
   transition: all 0.3s ease;
 }
 
-/* Products Selection */
-.products-selection {
+/* Products Management */
+.products-management {
   border: 1px solid #dee2e6;
+  border-radius: 10px;
+  padding: 1.5rem;
+  background-color: #f8f9fa;
+}
+
+.section-header {
+  margin-bottom: 1rem;
+}
+
+.current-products {
+  background-color: #e8f5e8;
+  border: 1px solid #28a745;
   border-radius: 8px;
   padding: 1rem;
-  background-color: #f8f9fa;
+}
+
+.current-products-list {
+  background-color: white;
+  border-radius: 6px;
+  padding: 0.5rem;
+}
+
+.add-products-section {
+  background-color: #e3f2fd;
+  border: 1px solid #007bff;
+  border-radius: 8px;
+  padding: 1rem;
 }
 
 .products-list {
@@ -1040,18 +1339,63 @@ export default {
   box-shadow: 0 2px 8px rgba(0, 123, 255, 0.15);
 }
 
+.product-item.current-product {
+  background-color: #fff;
+  border-color: #28a745;
+}
+
+.product-item.current-product:hover {
+  background-color: #f8fff8;
+  border-color: #28a745;
+}
+
+.product-item.validating {
+  background-color: #fff3cd;
+  border-color: #ffc107;
+}
+
+.product-item.invalid {
+  background-color: #f8d7da;
+  border-color: #dc3545;
+  cursor: not-allowed;
+}
+
 .product-image {
   width: 40px;
   height: 40px;
   overflow: hidden;
   border-radius: 6px;
   border: 1px solid #dee2e6;
+  position: relative;
 }
 
 .product-image img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.validation-spinner {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  padding: 2px;
+}
+
+.validation-error {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  background-color: white;
+  border-radius: 50%;
+  padding: 2px;
+}
+
+.validation-message {
+  font-size: 0.75rem;
 }
 
 .product-title {
@@ -1119,6 +1463,11 @@ export default {
   border-color: #007bff;
 }
 
+.form-check-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .badge {
   font-size: 0.7rem;
   padding: 0.25rem 0.5rem;
@@ -1163,6 +1512,33 @@ export default {
   background-color: #e9ecef;
   border-color: #e9ecef;
   color: #495057;
+}
+
+.btn-sm {
+  padding: 0.375rem 0.75rem;
+  font-size: 0.8rem;
+}
+
+.btn-outline-danger {
+  color: #dc3545;
+  border-color: #dc3545;
+}
+
+.btn-outline-danger:hover:not(:disabled) {
+  background-color: #dc3545;
+  border-color: #dc3545;
+  color: white;
+}
+
+.btn-outline-secondary {
+  color: #6c757d;
+  border-color: #6c757d;
+}
+
+.btn-outline-secondary:hover:not(:disabled) {
+  background-color: #6c757d;
+  border-color: #6c757d;
+  color: white;
 }
 
 .btn-close {
@@ -1229,6 +1605,15 @@ export default {
   .status-toggle-container {
     gap: 0.75rem;
   }
+
+  .products-management {
+    padding: 1rem;
+  }
+
+  .current-products,
+  .add-products-section {
+    padding: 0.75rem;
+  }
 }
 
 @media (max-width: 576px) {
@@ -1263,5 +1648,43 @@ export default {
     width: 2.5rem;
     height: 1.25rem;
   }
+
+  .product-item {
+    padding: 0.5rem;
+  }
+
+  .selected-items {
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .selected-item {
+    justify-content: space-between;
+  }
+
+  .section-header {
+    margin-bottom: 0.75rem;
+  }
+}
+
+/* Animation */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.product-item {
+  animation: fadeInUp 0.3s ease-out;
+}
+
+.current-products,
+.add-products-section {
+  animation: fadeInUp 0.5s ease-out;
 }
 </style>
