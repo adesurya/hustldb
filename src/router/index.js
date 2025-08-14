@@ -1,4 +1,4 @@
-// /src/router/index.js - Updated with Category route
+// /src/router/index.js - Updated with Redemption route
 import { createRouter, createWebHistory } from 'vue-router'
 import store from '../store'
 
@@ -32,7 +32,7 @@ const routes = [
     meta: { requiresAuth: true }
   },
   {
-    path: '/category', // Add category route
+    path: '/category',
     name: 'Category',
     component: () => import('../views/CategoryView.vue'),
     meta: { requiresAuth: true }
@@ -41,6 +41,12 @@ const routes = [
     path: '/users',
     name: 'Users',
     component: () => import('../views/UserView.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/redemption',
+    name: 'Redemption',
+    component: () => import('../views/RedemptionView.vue'),
     meta: { requiresAuth: true }
   }
 ]

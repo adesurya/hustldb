@@ -312,6 +312,7 @@ export default {
     Footer
   },
 
+  
   setup() {
     const toast = useToast()
     return { toast }
@@ -324,10 +325,10 @@ export default {
     }
   },
 
-  mounted() {
+  async mounted() {
     this.checkMobileScreen()
     window.addEventListener('resize', this.checkMobileScreen)
-    this.initializeDashboard()
+    await this.initializeDashboard()
   },
 
   beforeUnmount() {
@@ -386,18 +387,59 @@ export default {
     async initializeDashboard() {
       this.isRefreshing = true
       try {
-        await this.fetchAllStatistics()
+        console.log('🚀 Initializing dashboard...')
+        
+        // Fetch all statistics with enhanced error handling
+        const results = await this.fetchAllStatistics()
+        
+        // Count successful and failed requests
+        const successful = results.filter(result => result.status === 'fulfilled').length
+        const failed = results.filter(result => result.status === 'rejected').length
+        
+        console.log(`📊 Dashboard loaded: ${successful} successful, ${failed} failed`)
+        
+        // Show appropriate toast based on results
+        if (failed === 0) {
+          this.toast.success('Dashboard loaded successfully!')
+        } else if (successful > 0) {
+          this.toast.warning(`Dashboard loaded with ${failed} unavailable feature(s)`)
+        } else {
+          this.toast.error('Failed to load dashboard data')
+        }
+        
       } catch (error) {
-        console.error('Failed to load dashboard data:', error)
-        this.toast.error('Failed to load dashboard data')
+        console.error('❌ Failed to initialize dashboard:', error)
+        this.toast.error('Failed to load dashboard')
       } finally {
         this.isRefreshing = false
       }
     },
 
     async handleRefresh() {
-      await this.initializeDashboard()
-      this.toast.success('Dashboard data refreshed successfully!')
+      this.isRefreshing = true
+      try {
+        console.log('🔄 Refreshing dashboard...')
+        
+        const results = await this.refreshStatistics()
+        
+        // Count successful and failed requests
+        const successful = results.filter(result => result.status === 'fulfilled').length
+        const failed = results.filter(result => result.status === 'rejected').length
+        
+        if (failed === 0) {
+          this.toast.success('Dashboard refreshed successfully!')
+        } else if (successful > 0) {
+          this.toast.info(`Dashboard refreshed (${failed} features unavailable)`)
+        } else {
+          this.toast.error('Failed to refresh dashboard')
+        }
+        
+      } catch (error) {
+        console.error('❌ Failed to refresh dashboard:', error)
+        this.toast.error('Failed to refresh dashboard')
+      } finally {
+        this.isRefreshing = false
+      }
     },
 
     handleSidebarLogout() {

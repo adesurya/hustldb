@@ -1,4 +1,4 @@
-// /src/services/apiService.js - Updated with cookie authentication
+// /src/services/apiService.js - Enhanced with better error handling
 import axios from 'axios'
 import apiConfig, { HTTP_STATUS, ERROR_MESSAGES } from '@/config/api'
 
@@ -158,37 +158,51 @@ class ApiService {
 
   handleForbidden() {
     if (apiConfig.enableLogs) {
-      console.warn('Access forbidden')
+      console.warn('🚫 Access forbidden')
     }
   }
 
   handleNotFound(error) {
     if (apiConfig.enableLogs) {
-      console.warn('Resource not found:', error.config?.url)
+      console.warn('🔍 Resource not found:', error.config?.url)
+    }
+    
+    // Check if this is a known optional endpoint
+    const optionalEndpoints = [
+      '/api/v1/campaigns/statistics',
+      '/api/v1/redemptions/statistics'
+    ]
+    
+    const isOptionalEndpoint = optionalEndpoints.some(endpoint => 
+      error.config?.url?.includes(endpoint)
+    )
+    
+    if (isOptionalEndpoint) {
+      console.warn('⚠️ Optional endpoint not available:', error.config?.url)
     }
   }
 
   handleValidationError(error) {
     if (apiConfig.enableLogs) {
-      console.warn('Validation error:', error.response?.data)
+      console.warn('📝 Validation error:', error.response?.data)
     }
   }
 
   handleServerError(error) {
     if (apiConfig.enableLogs) {
-      console.error('Server error:', error.response?.status, error.response?.data)
+      console.error('🔥 Server error:', error.response?.status, error.response?.data)
     }
   }
 
   handleTimeout() {
     if (apiConfig.enableLogs) {
-      console.warn('Request timeout')
+      console.warn('⏰ Request timeout')
     }
   }
 
   handleNetworkError() {
     if (apiConfig.enableLogs) {
-      console.error('Network error - API might be unreachable')
+      console.error('🌐 Network error - API might be unreachable')
     }
   }
 
@@ -225,9 +239,34 @@ class ApiService {
     }
   }
 
-  // HTTP Methods
-  get(url, config = {}) {
-    return this.client.get(url, config)
+  // HTTP Methods with enhanced error handling
+  async get(url, config = {}) {
+    try {
+      return await this.client.get(url, config)
+    } catch (error) {
+      // For optional endpoints, return a default response instead of throwing
+      const optionalEndpoints = [
+        '/api/v1/campaigns/statistics',
+        '/api/v1/redemptions/statistics'
+      ]
+      
+      const isOptionalEndpoint = optionalEndpoints.some(endpoint => 
+        url.includes(endpoint)
+      )
+      
+      if (isOptionalEndpoint && error.response?.status === 404) {
+        console.warn(`⚠️ Optional endpoint ${url} not available, returning default response`)
+        return {
+          data: {
+            success: true,
+            data: {},
+            message: 'Endpoint not available'
+          }
+        }
+      }
+      
+      throw error
+    }
   }
 
   post(url, data = {}, config = {}) {
@@ -264,7 +303,7 @@ class ApiService {
     }
   }
 
-  // Utility method for handling API errors
+  // Enhanced error handling with better categorization
   static handleApiError(error) {
     let message = ERROR_MESSAGES.UNKNOWN_ERROR
     let code = 'UNKNOWN_ERROR'
@@ -286,8 +325,23 @@ class ApiService {
           code = 'FORBIDDEN'
           break
         case HTTP_STATUS.NOT_FOUND:
-          message = ERROR_MESSAGES.NOT_FOUND
-          code = 'NOT_FOUND'
+          // Check if this is an optional endpoint
+          const optionalEndpoints = [
+            '/api/v1/campaigns/statistics',
+            '/api/v1/redemptions/statistics'
+          ]
+          
+          const isOptionalEndpoint = optionalEndpoints.some(endpoint => 
+            error.config?.url?.includes(endpoint)
+          )
+          
+          if (isOptionalEndpoint) {
+            message = 'Feature not available'
+            code = 'FEATURE_NOT_AVAILABLE'
+          } else {
+            message = ERROR_MESSAGES.NOT_FOUND
+            code = 'NOT_FOUND'
+          }
           break
         case HTTP_STATUS.UNPROCESSABLE_ENTITY:
           message = error.response.data?.message || ERROR_MESSAGES.VALIDATION_ERROR

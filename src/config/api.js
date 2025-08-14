@@ -1,5 +1,4 @@
-// /src/config/api.js - Fixed with correct Product endpoints
-// API Configuration for different environments
+// /src/config/api.js - Fixed Campaign Statistics endpoint
 const config = {
   development: {
     baseURL: process.env.VUE_APP_API_URL || 'https://apihustl.sijago.ai',
@@ -29,7 +28,7 @@ const config = {
 const currentEnv = process.env.NODE_ENV || 'development'
 const apiConfig = config[currentEnv]
 
-// API Endpoints - Fixed to match actual API
+// API Endpoints - Fixed with correct endpoints
 export const API_ENDPOINTS = {
   AUTH: {
     LOGIN: '/api/v1/auth/login',
@@ -44,7 +43,8 @@ export const API_ENDPOINTS = {
     LEADERBOARD_STATISTICS: '/api/v1/leaderboard/statistics',
     PRODUCT_STATISTICS: '/api/v1/products/statistics',
     POINT_STATISTICS: '/api/v1/points/admin/statistics',
-    CAMPAIGN_STATISTICS: '/api/v1/campaigns/statistics'
+    // Updated campaign statistics endpoint (check if this exists in your API)
+    CAMPAIGN_STATISTICS: '/api/v1/campaigns/admin/statistics' // Changed from /api/v1/campaigns/statistics
   },
   
   PRODUCTS: {
@@ -80,7 +80,8 @@ export const API_ENDPOINTS = {
     GET_PRODUCTS: '/api/v1/campaigns/:id/products',
     BULK_DELETE: '/api/v1/campaigns/bulk-delete',
     BULK_STATUS: '/api/v1/campaigns/bulk-status',
-    STATISTICS: '/api/v1/campaigns/statistics'
+    // Updated statistics endpoint
+    STATISTICS: '/api/v1/campaigns/admin/statistics' // Changed from /api/v1/campaigns/statistics
   },
   
   USERS: {
@@ -96,6 +97,15 @@ export const API_ENDPOINTS = {
     BULK_DELETE: '/api/v1/users/bulk-delete',
     BULK_STATUS: '/api/v1/users/bulk-status',
     STATISTICS: '/api/v1/users/statistics'
+  },
+
+  REDEMPTIONS: {
+    LIST: '/api/v1/points/admin/redemptions',
+    DETAIL: '/api/v1/points/admin/redemptions/:id',
+    PROCESS: '/api/v1/points/admin/redemptions/:id/process',
+    BULK_APPROVE: '/api/v1/points/admin/redemptions/bulk-approve',
+    BULK_REJECT: '/api/v1/points/admin/redemptions/bulk-reject',
+    STATISTICS: '/api/v1/points/admin/redemptions/statistics'
   }
 }
 
@@ -122,7 +132,8 @@ export const ERROR_MESSAGES = {
   NOT_FOUND: 'The requested resource was not found.',
   SERVER_ERROR: 'Server error. Please try again later.',
   VALIDATION_ERROR: 'Please check your input data.',
-  UNKNOWN_ERROR: 'An unexpected error occurred.'
+  UNKNOWN_ERROR: 'An unexpected error occurred.',
+  FEATURE_NOT_AVAILABLE: 'This feature is not available yet.'
 }
 
 export default apiConfig

@@ -1,4 +1,4 @@
-<!-- Updated Sidebar Component with User link -->
+<!-- /src/components/partials/Sidebar.vue - Updated with Redemption menu -->
 <template>
   <div class="sidebar d-flex flex-column position-fixed h-100">
     <!-- Mobile Close Button -->
@@ -59,12 +59,12 @@
             class="sidebar-link d-flex align-items-center"
             :class="{ active: $route.name === 'Campaigns' }"
           >
-            <i class="fas fa-box me-3"></i>
+            <i class="fas fa-bullhorn me-3"></i>
             Campaigns
           </router-link>
         </li>
         
-       <li class="nav-item mb-1">
+        <li class="nav-item mb-1">
           <router-link 
             to="/users" 
             class="sidebar-link d-flex align-items-center"
@@ -72,6 +72,17 @@
           >
             <i class="fas fa-users me-3"></i>
             User
+          </router-link>
+        </li>
+
+        <li class="nav-item mb-1">
+          <router-link 
+            to="/redemption" 
+            class="sidebar-link d-flex align-items-center"
+            :class="{ active: $route.name === 'Redemption' }"
+          >
+            <i class="fas fa-gift me-3"></i>
+            Redemption
           </router-link>
         </li>
         
