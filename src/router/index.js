@@ -1,4 +1,4 @@
-// /src/router/index.js - Updated with Redemption route
+// /src/router/index.js - Updated with Leaderboard route
 import { createRouter, createWebHistory } from 'vue-router'
 import store from '../store'
 
@@ -47,6 +47,12 @@ const routes = [
     path: '/redemption',
     name: 'Redemption',
     component: () => import('../views/RedemptionView.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/leaderboard',
+    name: 'Leaderboard',
+    component: () => import('../views/LeaderboardView.vue'),
     meta: { requiresAuth: true }
   }
 ]

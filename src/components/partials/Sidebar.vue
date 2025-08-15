@@ -1,4 +1,4 @@
-<!-- /src/components/partials/Sidebar.vue - Updated with Redemption menu -->
+<!-- /src/components/partials/Sidebar.vue - Updated with Leaderboard menu -->
 <template>
   <div class="sidebar d-flex flex-column position-fixed h-100">
     <!-- Mobile Close Button -->
@@ -72,6 +72,17 @@
           >
             <i class="fas fa-users me-3"></i>
             User
+          </router-link>
+        </li>
+
+        <li class="nav-item mb-1">
+          <router-link 
+            to="/leaderboard" 
+            class="sidebar-link d-flex align-items-center"
+            :class="{ active: $route.name === 'Leaderboard' }"
+          >
+            <i class="fas fa-trophy me-3"></i>
+            Leaderboard
           </router-link>
         </li>
 
@@ -179,13 +190,13 @@ export default {
       try {
         console.log('Starting logout process...')
         
-        // Call API logout jika ada
+        // Call API logout if available
         await this.callLogoutAPI()
         
         // Clear all session data
         this.clearAllSessionData()
         
-        // Emit logout event ke parent component
+        // Emit logout event to parent component
         this.$emit('logout')
         
         // Redirect to login
@@ -194,10 +205,10 @@ export default {
       } catch (error) {
         console.error('Logout error:', error)
         
-        // Tetap clear session meskipun API gagal
+        // Still clear session even if API fails
         this.clearAllSessionData()
         
-        // Redirect tetap dilakukan
+        // Redirect anyway
         await this.redirectToLogin()
         
       } finally {
@@ -210,8 +221,8 @@ export default {
         const token = localStorage.getItem('token')
         
         if (token) {
-          // Panggil API logout jika ada endpoint-nya
-          // Ganti URL sesuai dengan endpoint API Anda
+          // Call logout API if endpoint exists
+          // Replace URL with your actual logout endpoint
           const response = await fetch('/api/logout', {
             method: 'POST',
             headers: {
@@ -226,7 +237,7 @@ export default {
         }
       } catch (error) {
         console.warn('Logout API error:', error)
-        // Lanjutkan proses logout meskipun API gagal
+        // Continue logout process even if API fails
       }
     },
     
@@ -253,7 +264,7 @@ export default {
         // Clear sessionStorage
         sessionStorage.clear()
         
-        // Clear cookies terkait authentication
+        // Clear cookies related to authentication
         this.clearAuthCookies()
         
         console.log('Session data cleared successfully')
@@ -265,7 +276,7 @@ export default {
     
     clearAuthCookies() {
       try {
-        // Daftar cookie yang mungkin perlu dihapus
+        // List of cookies that might need to be cleared
         const cookiesToClear = [
           'token',
           'authToken', 
@@ -293,27 +304,27 @@ export default {
       try {
         console.log('Redirecting to login...')
         
-        // Tunggu sebentar untuk memastikan state sudah clear
+        // Wait briefly to ensure state is cleared
         await new Promise(resolve => setTimeout(resolve, 100))
         
-        // Coba gunakan Vue Router dulu
+        // Try using Vue Router first
         if (this.$router) {
           await this.$router.push({ name: 'Login', query: { logout: 'true' } })
           
-          // Reload untuk memastikan semua state ter-reset
+          // Reload to ensure all state is reset
           setTimeout(() => {
             window.location.reload()
           }, 100)
           
         } else {
-          // Fallback ke window.location
+          // Fallback to window.location
           window.location.href = '/login?logout=true'
         }
         
       } catch (error) {
         console.error('Router redirect failed, using window.location:', error)
         
-        // Fallback ultimate
+        // Ultimate fallback
         window.location.href = '/login?logout=true'
       }
     }

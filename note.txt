@@ -1,0 +1,24 @@
+Campaign gambar
+Product gambar
+
+
+Backend Check
+1. Image Path Error https://apihustl.sijago.ai/uploads/products/product-1755158879403-682905366.PNG mendapatkan error {
+"success": false,
+"message": "Route /uploads/products/product-1755158879403-682905366.PNG not found",
+"timestamp": "2025-08-14T08:09:09.017Z",
+"code": "RESOURCE_NOT_FOUND"
+}
+
+2. Request payload create campaign with image
+3. Value redemption 100 = 1 rupiah
+4. buatkan 1 api untuk statistik redemption seperti api lainnya dan sesuaikan pada frontend
+5. fungsi humberger menu ketika di klik akan menampilkan opsi approve atau reject. dan ketika ini di tekan akan memanggil api masing-masing
+6. Penambahan endpoint 18. [Admin] Check Request Redeem Point - Perlu ditambahkan di Menu Redemption
+
+History Transaction 
+	1. Order Product
+Leaderboard 
+	1. Leaderboard
+	2. 
+	

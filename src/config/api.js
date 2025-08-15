@@ -1,4 +1,4 @@
-// /src/config/api.js - Fixed Campaign Statistics endpoint
+// /src/config/api.js - Updated with Leaderboard endpoints
 const config = {
   development: {
     baseURL: process.env.VUE_APP_API_URL || 'https://apihustl.sijago.ai',
@@ -28,7 +28,7 @@ const config = {
 const currentEnv = process.env.NODE_ENV || 'development'
 const apiConfig = config[currentEnv]
 
-// API Endpoints - Fixed with correct endpoints
+// API Endpoints - Updated with Leaderboard endpoints
 export const API_ENDPOINTS = {
   AUTH: {
     LOGIN: '/api/v1/auth/login',
@@ -43,8 +43,7 @@ export const API_ENDPOINTS = {
     LEADERBOARD_STATISTICS: '/api/v1/leaderboard/statistics',
     PRODUCT_STATISTICS: '/api/v1/products/statistics',
     POINT_STATISTICS: '/api/v1/points/admin/statistics',
-    // Updated campaign statistics endpoint (check if this exists in your API)
-    CAMPAIGN_STATISTICS: '/api/v1/campaigns/admin/statistics' // Changed from /api/v1/campaigns/statistics
+    CAMPAIGN_STATISTICS: '/api/v1/campaigns/admin/statistics'
   },
   
   PRODUCTS: {
@@ -80,8 +79,7 @@ export const API_ENDPOINTS = {
     GET_PRODUCTS: '/api/v1/campaigns/:id/products',
     BULK_DELETE: '/api/v1/campaigns/bulk-delete',
     BULK_STATUS: '/api/v1/campaigns/bulk-status',
-    // Updated statistics endpoint
-    STATISTICS: '/api/v1/campaigns/admin/statistics' // Changed from /api/v1/campaigns/statistics
+    STATISTICS: '/api/v1/campaigns/admin/statistics'
   },
   
   USERS: {
@@ -106,6 +104,21 @@ export const API_ENDPOINTS = {
     BULK_APPROVE: '/api/v1/points/admin/redemptions/bulk-approve',
     BULK_REJECT: '/api/v1/points/admin/redemptions/bulk-reject',
     STATISTICS: '/api/v1/points/admin/redemptions/statistics'
+  },
+
+  // New Leaderboard endpoints
+  LEADERBOARD: {
+    COMPREHENSIVE: '/api/v1/leaderboard/comprehensive',
+    STATISTICS: '/api/v1/leaderboard/statistics'
+  },
+
+  // New Points management endpoints
+  POINTS: {
+    STATISTICS: '/api/v1/points/admin/statistics',
+    TRANSACTIONS: '/api/v1/points/admin/transactions',
+    AWARD: '/api/v1/points/admin/award',
+    USER_BALANCE: '/api/v1/points/admin/users/:id/balance',
+    USER_TRANSACTIONS: '/api/v1/points/admin/users/:id/transactions'
   }
 }
 
